@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+<title>Sistema Lencería</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+  /* Loader Overlay */
+  #loader-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.95);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+  }
+  #loader-overlay.active {
+    opacity: 1;
+    visibility: visible;
+  }
+  #loader-overlay .spinner-container {
+    text-align: center;
+  }
+  #loader-overlay .spinner-text {
+    margin-top: 15px;
+    color: #6c757d;
+    font-size: 1rem;
+    font-weight: 500;
+  }
+
+  /* Ajustes responsive adicionales */
+  @media (max-width: 768px) {
+    /* Reducir padding en móvil */
+    .container-fluid {
+      padding-left: 0.5rem !important;
+      padding-right: 0.5rem !important;
+    }
+
+    /* Hacer inputs más grandes para mejor toque */
+    .form-control, .form-select, .btn {
+      min-height: 44px;
+    }
+
+    /* Mejorar espaciado en listas */
+    .list-group-item {
+      padding: 0.75rem 0.5rem;
+    }
+
+    /* Ajustar tamaño de texto en el catálogo */
+    .item-articulo summary {
+      font-size: 0.95em !important;
+    }
+
+    /* Hacer botones de acción más grandes en móvil */
+    .btn-sm {
+      padding: 0.375rem 0.75rem;
+      font-size: 0.9rem;
+    }
+
+    /* Mejorar visualización de tablas en móvil */
+    .table-responsive {
+      border: 1px solid #dee2e6;
+      border-radius: 0.375rem;
+    }
+
+    /* Ajustar pills de navegación de reportes */
+    .nav-pills {
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .nav-pills .nav-item {
+      flex: 1;
+      min-width: 140px;
+    }
+    .nav-pills .nav-link {
+      width: 100%;
+      text-align: center;
+      padding: 0.5rem;
+      font-size: 0.9rem;
+    }
+
+    /* Mejorar cards de balance */
+    .sub-pantalla-reportes .col {
+      flex: 1 1 100%;
+      margin-bottom: 1rem;
+    }
+  }
+
+  /* Ajustes para tablets */
+  @media (min-width: 769px) and (max-width: 991px) {
+    .col-md-8, .col-md-4 {
+      flex: 1 1 100%;
+      max-width: 100%;
+    }
+  }
+
+  /* Scroll suave en toda la página */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Prevenir zoom en inputs en iOS */
+  @supports (-webkit-touch-callout: none) {
+    input, select, textarea {
+      font-size: 16px;
+    }
+  }
+</style>
+</head>
+<body>
+<div id="pantalla-login" class="container d-flex justify-content-center align-items-center px-3" style="min-height: 100vh; padding-top: 20px; padding-bottom: 20px;">
+  <div class="card p-3 p-md-4 shadow w-100" style="max-width: 400px;">
+            <div class="text-center mb-4">
+                <h2 class="text-primary">Sistema Lencería</h2>
+                <p class="text-muted">Ingrese sus credenciales</p>
+            </div>
+            <form id="formulario-login">
+                <div class="mb-3">
+                    <label for="username" class="form-label">Usuario</label>
+                    <input type="text" class="form-control" id="username" required>
+                </div>
+                <div class="mb-3">
+                    <label for="password" class="form-label">Contraseña</label>
+                    <input type="password" class="form-control" id="password" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Ingresar</button>
+            </form>
+        </div>
+    </div>
+    <div id="app-principal" style="display: none;">
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4 shadow">
+  <div class="container-fluid">
+    <span class="navbar-brand mb-0 h3">🌸 Lencería</span>
+
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item">
+          <button class="btn btn-outline-light border-0 w-100 text-start" onclick="cambiarPantalla('pantalla-ventas'); cerrarMenuNavbar();">🛒 Punto de Venta</button>
+        </li>
+        <li class="nav-item">
+          <button class="btn btn-outline-light border-0 w-100 text-start" onclick="cambiarPantalla('pantalla-compras'); cerrarMenuNavbar();">📦 Compras</button>
+        </li>
+        <li class="nav-item" id="nav-item-admin">
+          <button class="btn btn-outline-warning border-0 w-100 text-start" id="btn-nav-admin" onclick="cambiarPantalla('pantalla-admin'); cerrarMenuNavbar();">⚙️ Administración</button>
+        </li>
+        <li class="nav-item" id="nav-item-reportes">
+          <button class="btn btn-outline-info border-0 w-100 text-start" id="btn-nav-reportes" onclick="cambiarPantalla('pantalla-reportes'); cerrarMenuNavbar();">📊 Reportes</button>
+        </li>
+        <li class="nav-item">
+          <button class="btn btn-danger w-100 mt-lg-0 mt-2" onclick="cerrarSesion()">🚪 Salir</button>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+        
+        <div class="container-fluid px-4">
+
+<div id="pantalla-ventas" class="pantalla-sistema">
+  <div class="row">
+    <!-- Carrito: Primero en móvil, segundo en desktop -->
+    <div class="col-md-4 order-1 order-md-2 mb-3 mb-md-0">
+      <div class="card shadow border-success">
+        <div class="card-header bg-success text-white">
+          <h4 class="mb-0 fs-5">🛒 Tu Carrito</h4>
+        </div>
+        <div class="card-body">
+          <ul id="lista-carrito" class="list-group mb-3"></ul>
+          <h3 class="text-end text-success fw-bold fs-4">Total: $<span id="total-carrito">0</span></h3>
+          <hr>
+          <select id="metodo-pago-venta" class="form-select mb-2">
+            <option value="EFECTIVO">Efectivo</option>
+            <option value="TARJETA">Tarjeta</option>
+            <option value="TRANSFERENCIA">Transferencia</option>
+          </select>
+          <select id="vendedor" class="form-select mb-4">
+            <option value="FLAVIO">Flavio</option>
+            <option value="MARISA">Marisa</option>
+          </select>
+          <button id="btn-cobrar" class="btn btn-success w-100 mb-2 fw-bold fs-6">Confirmar Venta</button>
+          <button onclick="vaciarCarrito()" class="btn btn-outline-danger w-100">Vaciar Carrito</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Catálogo: Segundo en móvil, primero en desktop -->
+    <div class="col-md-8 order-2 order-md-1">
+      <div class="card shadow-sm mb-3 bg-primary text-white">
+        <div class="card-body text-center">
+          <h4 class="mb-3 fs-5">Lector de Código de Barras</h4>
+          <input type="text" id="lector-codigo-ventas" class="form-control form-control-lg text-center input-lector" placeholder="Haga clic aquí y escanee..." autofocus>
+        </div>
+      </div>
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <input type="text" id="buscador-ventas" class="form-control mb-3" onkeyup="filtrarCatalogo('buscador-ventas', 'catalogo-ventas')" placeholder="🔍 Buscar articulo o marca...">
+          <ul id="catalogo-ventas" class="list-group list-group-flush"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="pantalla-compras" class="pantalla-sistema" style="display: none;">
+  <div class="row">
+    <!-- Ingreso: Primero en móvil, segundo en desktop -->
+    <div class="col-md-4 order-1 order-md-2 mb-3 mb-md-0">
+      <div class="card shadow border-danger">
+        <div class="card-header bg-danger text-white">
+          <h4 class="mb-0 fs-5">📦 Ingreso</h4>
+        </div>
+        <div class="card-body">
+          <ul id="lista-ingreso" class="list-group mb-3"></ul>
+          <h3 class="text-end text-danger fw-bold fs-4">Total: $<span id="total-ingreso">0</span></h3>
+          <hr>
+          <select id="metodo-pago-compra" class="form-select mb-4">
+            <option value="EFECTIVO">Efectivo</option>
+            <option value="TARJETA">Tarjeta</option>
+            <option value="TRANSFERENCIA">Transferencia</option>
+          </select>
+          <button id="btn-pagar" class="btn btn-danger w-100 mb-2 fw-bold fs-6">Confirmar Compra</button>
+          <button onclick="vaciarIngreso()" class="btn btn-outline-secondary w-100">Cancelar Ingreso</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Catálogo: Segundo en móvil, primero en desktop -->
+    <div class="col-md-8 order-2 order-md-1">
+      <div class="card shadow-sm mb-3 bg-danger text-white">
+        <div class="card-body text-center">
+          <h4 class="mb-3 fs-5">Lector de Código de Barras (Ingreso)</h4>
+          <input type="text" id="lector-codigo-compras" class="form-control form-control-lg text-center input-lector" placeholder="Haga clic aquí y escanee...">
+        </div>
+      </div>
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <input type="text" id="buscador-compras" class="form-control mb-3" onkeyup="filtrarCatalogo('buscador-compras', 'catalogo-compras')" placeholder="🔍 Buscar articulo o marca...">
+          <ul id="catalogo-compras" class="list-group list-group-flush"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+            <div id="pantalla-admin" class="pantalla-sistema" style="display: none;">
+
+                <nav style="background-color: #909090; padding: 10px; margin-bottom: 20px;">
+                    <button onclick="cambiarSubPantallaAdmin('sub-pantalla-articulos')" style="padding: 10px; margin-right: 5px;"> Gestion de Articulos </button>
+                    <button onclick="cambiarSubPantallaAdmin('sub-pantalla-gastos')" style="padding: 10px;"> Gastos Generales </button>
+                </nav>
+<div id="sub-pantalla-articulos" class="sub-pantalla-admin" style="display: none;">
+<div class="admin-layout" style="display: flex; flex-direction: column; min-height: 80vh;">
+<nav class="admin-sidebar" style="background-color: #f4f4f4; padding: 15px; border-bottom: 1px solid #ccc;">
+<h3 style="margin-top: 0; margin-bottom: 15px;">Catálogo</h3>
+<div class="d-flex flex-wrap gap-2">
+<button onclick="cambiarPanelAdmin('panel-articulos')" class="btn btn-outline-secondary" style="flex: 1; min-width: 120px;">Artículos</button>
+<button onclick="cambiarPanelAdmin('panel-marcas')" class="btn btn-outline-secondary" style="flex: 1; min-width: 120px;">Marcas</button>
+<button onclick="cambiarPanelAdmin('panel-categorias')" class="btn btn-outline-secondary" style="flex: 1; min-width: 120px;">Categorías</button>
+</div>
+</nav>
+
+<main style="flex: 1; padding: 15px;">
+                            <div id="panel-articulos" class="panel-admin" style="display: none;">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h2>Gestión de Artículos</h2>
+                                    <button class="btn btn-primary" onclick="mostrarFormularioArticulo()" data-bs-toggle="modal" data-bs-target="#modalArticulo">
+                                        + Nuevo Artículo
+                                    </button>
+                                </div>
+
+<div class="modal fade" id="modalArticulo" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down">
+                                        <div class="modal-content">
+                                            <div class="modal-header bg-primary text-white">
+                                                <h5 class="modal-title" id="titulo-modal-articulo">Nuevo Artículo</h5>
+                                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="cancelarEdicionArticulo()"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <form id="formulario-articulo">
+                                                    <div class="mb-3">
+                                                        <input type="text" id="nombre" class="form-control" placeholder="Nombre del artículo" required>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <select id="categoria-articulo" class="form-select" required></select>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <select id="marca-articulo" class="form-select" required></select>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <textarea id="descripcion" class="form-control" placeholder="Descripción (Opcional)"></textarea>
+                                                    </div>
+                                                    <div class="d-grid">
+                                                        <button id="btn-guardar-articulo" type="submit" class="btn btn-success">Guardar Artículo</button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+<div class="modal fade" id="modalVariante" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down">
+                                        <div class="modal-content">
+                                            <div class="modal-header bg-info text-dark">
+                                                <h5 class="modal-title">Variante: <span id="articulo-seleccionado" class="fw-bold"></span></h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" onclick="cancelarEdicionVariante()"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <form id="formulario-variante">
+                                                    <div class="row mb-3">
+                                                        <div class="col"><input type="text" id="talle" class="form-control" placeholder="Talle (ej: M)" required></div>
+                                                        <div class="col"><input type="text" id="color" class="form-control" placeholder="Color (ej: Rojo)" required></div>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <input type="number" step="0.01" id="precio" class="form-control" placeholder="Precio ($)" required>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <input type="text" id="codigo-barras" class="form-control" placeholder="Código de Barras (Opcional)">
+                                                    </div>
+                                                    <div class="d-grid">
+                                                        <button id="btn-guardar-variante" type="submit" class="btn btn-info">Guardar Variante</button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+<div class="modal fade" id="modalStock" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down">
+                                        <div class="modal-content">
+                                            <div class="modal-header bg-warning text-dark">
+                                                <h5 class="modal-title">Movimiento de Stock</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" onclick="cancelarStock()"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <p class="text-muted mb-3">Prenda: <strong id="articulo-seleccionado-mov"></strong> | Talle: <strong id="talle-seleccionado-mov"></strong></p>
+                                                <form id="formulario-stock">
+                                                    <div class="mb-3">
+                                                        <select id="tipo-movimiento" class="form-select" required>
+                                                            <option value="ENTRADA">Entrada (Sumar mercadería)</option>
+                                                            <option value="SALIDA">Salida (Prenda fallada/Pérdida)</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <input type="number" id="cantidad-stock" class="form-control" placeholder="Cantidad (ej: 5)" required min="1">
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <input type="text" id="motivo" class="form-control" placeholder="Motivo (ej: Devolución, Fallada)" required>
+                                                    </div>
+                                                    <div class="d-grid">
+                                                        <button type="submit" class="btn btn-warning">Confirmar Movimiento</button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="card shadow-sm mt-3">
+                                    <div class="card-body">
+                                        <div class="row mb-3">
+                                            <div class="col-md-6"><input type="text" id="buscador-admin" class="form-control" onkeyup="filtrarArticulosAvanzado()" placeholder="🔍 Buscar articulo o marca..."></div>
+                                            <div class="col-md-3"><select id="filtro-marca-admin" class="form-select" onchange="filtrarArticulosAvanzado()"><option value="TODAS">Todas las Marcas</option></select></div>
+                                            <div class="col-md-3"><select id="filtro-categoria-articulo-admin" class="form-select" onchange="filtrarArticulosAvanzado()"><option value="TODAS">Todas las Categorías</option></select></div>
+                                        </div>
+                                        <ul id="catalogo-admin" class="list-group list-group-flush"></ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="panel-marcas" class="panel-admin" style="display: none;">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h2>Gestión de Marcas</h2>
+                                    <button class="btn btn-primary" onclick="mostrarFormularioMarca()" data-bs-toggle="modal" data-bs-target="#modalMarca">
+                                        + Nueva Marca
+                                    </button>
+                                </div>
+
+<div class="modal fade" id="modalMarca" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down">
+                                        <div class="modal-content">
+                                            <div class="modal-header bg-primary text-white">
+                                                <h5 class="modal-title" id="titulo-modal-marca">Nueva Marca</h5>
+                                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="cancelarEdicionMarca()"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <form id="formulario-marca">
+                                                    <div class="mb-3">
+                                                        <input type="text" id="nombre-marca" class="form-control" placeholder="Nombre de la marca" required>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <textarea id="descripcion-marca" class="form-control" placeholder="Descripción (Opcional)"></textarea>
+                                                    </div>
+                                                    <div class="d-grid">
+                                                        <button id="btn-guardar-marca" type="submit" class="btn btn-success">Guardar Marca</button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="card shadow-sm mt-4">
+                                    <div class="card-body">
+                                        <input type="text" id="buscador-marcas" class="form-control mb-3" onkeyup="filtrarCatalogo('buscador-marcas', 'lista-admin-marcas')" placeholder="🔍 Buscar marca...">
+                                        <ul id="lista-admin-marcas" class="list-group list-group-flush"></ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="panel-categorias" class="panel-admin" style="display: none;">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h2>Gestión de Categorías</h2>
+                                    <button class="btn btn-primary" onclick="mostrarFormularioCategoriaArticulo()" data-bs-toggle="modal" data-bs-target="#modalCategoriaArticulo">
+                                        + Nueva Categoría
+                                    </button>
+                                </div>
+
+<div class="modal fade" id="modalCategoriaArticulo" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down">
+                                        <div class="modal-content">
+                                            <div class="modal-header bg-primary text-white">
+                                                <h5 class="modal-title" id="titulo-modal-cat-art">Nueva Categoría</h5>
+                                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="cancelarEdicionCategoriaArticulo()"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <form id="formulario-categoria-articulo">
+                                                    <div class="mb-3">
+                                                        <input type="text" id="nombre-categoria-articulo" class="form-control" placeholder="Nombre (ej: Conjuntos)" required>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <input type="text" id="descripcion-categoria-articulo" class="form-control" placeholder="Descripción (Opcional)">
+                                                    </div>
+                                                    <div class="d-grid">
+                                                        <button id="btn-guardar-categoria-articulo" type="submit" class="btn btn-success">Guardar Categoría</button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="card shadow-sm mt-4">
+                                    <div class="card-body">
+                                        <input type="text" id="buscador-categorias-articulos" class="form-control mb-3" onkeyup="filtrarCatalogo('buscador-categorias-articulos', 'lista-admin-categorias-articulos')" placeholder="🔍 Buscar categoria...">
+                                        <ul id="lista-admin-categorias-articulos" class="list-group list-group-flush"></ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </main>
+                    </div>
+                    
+                    
+                </div>
+
+                <div id="sub-pantalla-gastos" class="sub-pantalla-admin" style="display: none;">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="card shadow-sm mb-4">
+                                <div class="card-header bg-secondary text-white">
+                                    <h5 class="card-title mb-0">Categorías de Gastos</h5>
+                                </div>
+                                <div class="card-body">
+                                    <form id="formulario-nueva-categoria" class="mb-3">
+                                        <div class="input-group">
+                                            <input type="text" id="nombre-nueva-categoria" class="form-control" placeholder="Ej: Sueldos, Impuestos..." required>
+                                            <button id="btn-guardar-categoria-gasto" class="btn btn-secondary" type="submit">+</button>
+                                        </div>
+                                        <button type="button" id="btn-cancelar-edicion-categoria-gasto" class="btn btn-sm btn-outline-danger mt-2 w-100" onclick="cancelarEdicionCategoriaGasto()" style="display: none;">Cancelar Edición</button>
+                                    </form>
+                                    <ul id="lista-categorias-gastos" class="list-group list-group-flush"></ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-8">
+                            <div class="card shadow-sm">
+                                <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+                                    <h5 class="card-title mb-0">Últimos Gastos Registrados</h5>
+                                    <button class="btn btn-light btn-sm fw-bold" onclick="prepararNuevoGasto()" data-bs-toggle="modal" data-bs-target="#modalGasto">+ Nuevo Gasto</button>
+                                </div>
+                                <div class="card-body p-0">
+                                    <div class="table-responsive">
+                                        <table class="table table-hover mb-0 text-center align-middle">
+                                             <thead class="table-dark">
+                                                <tr>
+                                                    <th>Fecha</th>
+                                                    <th>Categoría</th>
+                                                    <th>Descripción</th>
+                                                    <th>Monto</th>
+                                                    <th>Acciones</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tbody-ultimos-gastos"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+<div class="modal fade" id="modalGasto" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down">
+                        <div class="modal-content">
+                            <div class="modal-header bg-danger text-white">
+                                <h5 class="modal-title" id="titulo-modal-gasto">Registrar Gasto</h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="cancelarEdicionGasto()"></button>
+                            </div>
+                            <div class="modal-body">
+                                <form id="formulario-gastos">
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Categoría</label>
+                                        <select id="categoria-gasto" class="form-select" required></select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Fecha del Pago</label>
+                                        <input type="date" id="fecha-gasto" class="form-control" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Monto ($)</label>
+                                        <input type="number" step="0.01" id="monto-gasto" class="form-control" placeholder="0.00" required min="0">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Descripción (Opcional)</label>
+                                        <input type="text" id="descripcion-gasto" class="form-control" placeholder="Ej: Factura luz Enero">
+                                    </div>
+                                    <div class="d-grid">
+                                        <button id="btn-guardar-gasto" type="submit" class="btn btn-danger">Guardar Gasto</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="pantalla-reportes" class="pantalla-sistema" style="display: none;">
+                <h2 class="mb-4">Historial de Movimientos y Balances</h2>
+                
+                <ul class="nav nav-pills mb-4 bg-white p-2 rounded shadow-sm">
+                    <li class="nav-item"><button class="nav-link active btn-reporte" onclick="cambiarSubPantallaReportes('sub-pantalla-ventas', this)">Ventas</button></li>
+                    <li class="nav-item"><button class="nav-link btn-reporte" onclick="cambiarSubPantallaReportes('sub-pantalla-compras', this)">Compras</button></li>
+                    <li class="nav-item"><button class="nav-link btn-reporte" onclick="cambiarSubPantallaReportes('sub-pantalla-movimientos', this)">Movimientos</button></li>
+                    <li class="nav-item"><button class="nav-link btn-reporte" onclick="cambiarSubPantallaReportes('sub-pantalla-historial-gastos', this)">Gastos Generales</button></li>
+                    <li class="nav-item"><button class="nav-link btn-reporte text-success fw-bold" onclick="cambiarSubPantallaReportes('sub-pantalla-balances', this)">Balances Financieros</button></li>
+                </ul>
+
+                <div class="card shadow-sm p-4">
+<div id="sub-pantalla-ventas" class="sub-pantalla-reportes">
+      <form id="form-filtro-ventas" class="d-flex flex-column flex-sm-row gap-2 mb-4 w-100">
+        <input type="month" id="mesAnio-ventas" class="form-control" required>
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+      </form>
+      <p id="mensaje-sin-ventas" class="text-muted fst-italic text-center" style="display: none;">No hay ventas registradas para este período.</p>
+      <div class="table-responsive">
+        <table id="tabla-ventas" class="table table-hover table-striped align-middle" style="display: none;">
+          <thead class="table-dark">
+            <tr><th>N° Op</th><th>Fecha</th><th>Vendedor</th><th>Método</th><th>Detalle</th><th>Total</th></tr>
+          </thead>
+          <tbody id="tbody-historial-ventas"></tbody>
+        </table>
+      </div>
+    </div>
+
+<div id="sub-pantalla-compras" class="sub-pantalla-reportes" style="display: none;">
+      <form id="form-filtro-compras" class="d-flex flex-column flex-sm-row gap-2 mb-4 w-100">
+        <input type="month" id="mesAnio-compras" class="form-control" required>
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+      </form>
+      <p id="mensaje-sin-compras" class="text-muted fst-italic text-center" style="display: none;">No hay compras registradas para este período.</p>
+      <div class="table-responsive">
+        <table id="tabla-compras" class="table table-hover table-striped align-middle" style="display: none;">
+          <thead class="table-dark">
+            <tr><th>N° Op</th><th>Fecha</th><th>Método</th><th>Detalle</th><th>Total</th></tr>
+          </thead>
+          <tbody id="tbody-historial-compras"></tbody>
+        </table>
+      </div>
+    </div>
+
+<div id="sub-pantalla-movimientos" class="sub-pantalla-reportes" style="display: none;">
+      <form id="form-filtro-movimientos" class="d-flex flex-column flex-sm-row gap-2 mb-4 w-100">
+        <input type="month" id="mesAnio-movimientos" class="form-control" required>
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+      </form>
+      <p id="mensaje-sin-movimientos" class="text-muted fst-italic text-center" style="display: none;">No hay movimientos registrados para este período.</p>
+      <div class="table-responsive">
+        <table id="tabla-movimientos" class="table table-hover table-striped align-middle" style="display: none;">
+          <thead class="table-dark">
+            <tr><th>N° Op</th><th>Fecha</th><th>Prenda</th><th>Tipo</th><th>Cantidad</th><th>Motivo</th></tr>
+          </thead>
+          <tbody id="tbody-historial-movimientos"></tbody>
+        </table>
+      </div>
+    </div>
+
+<div id="sub-pantalla-historial-gastos" class="sub-pantalla-reportes" style="display: none;">
+      <form id="form-filtro-gastos" class="d-flex flex-column flex-sm-row gap-2 mb-4 w-100">
+        <input type="month" id="mesAnio-gastos" class="form-control" required>
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+      </form>
+      <p id="mensaje-sin-gastos" class="text-muted fst-italic text-center" style="display: none;">No hay gastos registrados para este período.</p>
+      <div class="table-responsive">
+        <table id="tabla-historial-gastos" class="table table-hover table-striped align-middle" style="display: none;">
+          <thead class="table-dark">
+            <tr><th>N° Op</th><th>Fecha</th><th>Categoria</th><th>Descripcion</th><th>Monto</th></tr>
+          </thead>
+          <tbody id="tbody-historial-gastos"></tbody>
+        </table>
+      </div>
+    </div>
+
+<div id="sub-pantalla-balances" class="sub-pantalla-reportes" style="display: none;">
+      <form id="form-filtro-balances" class="d-flex flex-column flex-sm-row gap-2 mb-4 w-100 mx-auto" style="max-width: 400px;">
+        <input type="month" id="mesAnio-balances" class="form-control" required>
+        <button type="submit" class="btn btn-success">Generar balance</button>
+      </form>
+      <div class="row text-center g-3">
+                            <div class="col border border-success p-3 rounded shadow-sm">
+                                <h4 class="text-success">Ingresos (Ventas)</h4>
+                                <p class="mb-1">Operaciones: <span id="resumen-ventas-cantidad" class="fw-bold">0</span></p>
+                                <p class="mb-3">Prendas Vendidas: <span id="resumen-prendas-vendidas" class="fw-bold">0</span></p>
+                                <h5 class="bg-success text-white p-2 rounded">Total: $<span id="resumen-ingresos-ventas">0.00</span></h5>
+                            </div>
+                            <div class="col border border-warning p-3 rounded shadow-sm">
+                                <h4 class="text-warning text-dark">Gastos Admin</h4>
+                                <p class="mb-1">Pagos Registrados: <span id="resumen-gastos-cant-admin" class="fw-bold">0</span></p> 
+                                <br>
+                                <h5 class="bg-warning text-dark p-2 rounded">Total: $<span id="resumen-gastos-admin">0.00</span></h5>
+                            </div>
+                            <div class="col border border-danger p-3 rounded shadow-sm">
+                                <h4 class="text-danger">Egresos (Compras)</h4>
+                                <p class="mb-1">Operaciones: <span id="resumen-compras-cantidad" class="fw-bold">0</span></p>
+                                <p class="mb-3">Prendas Ingresadas: <span id="resumen-prendas-ingresadas" class="fw-bold">0</span></p>
+                                <h5 class="bg-danger text-white p-2 rounded">Total: $<span id="resumen-egresos-compras">0.00</span></h5>
+                            </div>
+                        </div>
+
+                        <div class="row mt-4">
+                            <div class="col-md-6">
+                                <div class="card shadow-sm border-success bg-success bg-opacity-10">
+                                    <div class="card-body text-center">
+                                        <h3 class="text-success mb-0">Total Ingresos: $<span id="resumen-ingresos-total" class="fw-bold">0.00</span></h3>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card shadow-sm border-danger bg-danger bg-opacity-10">
+                                    <div class="card-body text-center">
+                                        <h3 class="text-danger mb-0">Total Egresos: $<span id="resumen-egresos-total" class="fw-bold">0.00</span></h3>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card mt-4 shadow border-0 bg-light">
+                            <div class="card-body text-center">
+                                <h2 class="mb-0">Utilidad Neta del Mes: $<span id="resumen-ganancia-total" class="fw-bold">0.00</span></h2>
+                            </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+</div>
+
+<!-- Modal para seleccionar variante cuando el código corresponde a múltiples opciones (distintos colores) -->
+<div class="modal fade" id="modalSelectorVariante" tabindex="-1" aria-hidden="true">
+<div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down">
+<div class="modal-content">
+<div class="modal-header bg-primary text-white">
+<h5 class="modal-title">Seleccionar Variante</h5>
+<button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+</div>
+<div class="modal-body">
+<div class="mb-3">
+<label class="form-label fw-bold">Producto:</label>
+<p id="selector-variante-nombre" class="fs-5 mb-1"></p>
+<p id="selector-variante-detalles" class="text-muted"></p>
+</div>
+<div class="mb-3">
+<label class="form-label fw-bold">Seleccione una opción:</label>
+<div id="selector-variante-opciones" class="d-grid gap-2">
+<!-- Opciones generadas dinámicamente -->
+</div>
+</div>
+</div>
+<div class="modal-footer">
+<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Modal para ingreso por código de barras (Compras) -->
+<div class="modal fade" id="modalCompraEscaneada" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title">📦 Ingreso por Código de Barras</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-bold">Producto:</label>
+          <p id="producto-escaneado-nombre" class="fs-5 mb-1"></p>
+          <p id="producto-escaneado-detalles" class="text-muted"></p>
+        </div>
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label for="precio-compra-escaneado" class="form-label fw-bold">Precio de Compra ($)</label>
+            <input type="number" id="precio-compra-escaneado" class="form-control form-control-lg" min="0" step="0.01" placeholder="0.00" required>
+          </div>
+          <div class="col-md-6 mb-3">
+            <label for="cantidad-escaneado" class="form-label fw-bold">Cantidad</label>
+            <input type="number" id="cantidad-escaneado" class="form-control form-control-lg" min="1" value="1" required>
+          </div>
+        </div>
+        <input type="hidden" id="escaneado-id-variante">
+        <input type="hidden" id="escaneado-nombre">
+        <input type="hidden" id="escaneado-marca">
+        <input type="hidden" id="escaneado-talle">
+        <input type="hidden" id="escaneado-color">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-danger fw-bold" onclick="confirmarIngresoEscaneado()">Agregar al Ingreso</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Loader Overlay Global -->
+<div id="loader-overlay">
+  <div class="spinner-container">
+    <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+      <span class="visually-hidden">Cargando...</span>
+    </div>
+    <div class="spinner-text">Procesando...</div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script> 
+    <script src="app.js"></script>
+</body>
+</html>
