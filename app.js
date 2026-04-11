@@ -14,9 +14,9 @@ let ingreso = [];
 // --- FUNCIONES UTILIDAD ---
 
 /**
- * Sanitiza texto para prevenir XSS
- * Convierte caracteres especiales HTML en entidades seguras
- */
+* Sanitiza texto para prevenir XSS
+* Convierte caracteres especiales HTML en entidades seguras
+*/
 function sanitizeText(text) {
   if (text === null || text === undefined) return '';
   const div = document.createElement('div');
@@ -25,11 +25,55 @@ function sanitizeText(text) {
 }
 
 /**
- * Escapa comillas simples para uso en atributos onclick
- */
+* Escapa comillas simples para uso en atributos onclick
+*/
 function escapeQuotes(text) {
   if (text === null || text === undefined) return '';
   return String(text).replace(/'/g, "\\'");
+}
+
+/**
+* Muestra una alerta de éxito personalizada sin icono
+* @param {string} titulo - El título de la alerta
+* @param {string} texto - El texto adicional (opcional)
+*/
+function mostrarAlertaExito(titulo, texto = '') {
+  Swal.fire({
+    title: titulo,
+    text: texto || 'success',
+    icon: null,
+    showConfirmButton: true,
+    confirmButtonText: 'Aceptar',
+    customClass: {
+      popup: 'swal2-no-icon'
+    },
+    didOpen: () => {
+      const icon = Swal.getIcon();
+      if (icon) icon.style.display = 'none';
+    }
+  });
+}
+
+/**
+* Muestra una alerta de error personalizada sin icono
+* @param {string} titulo - El título de la alerta
+* @param {string} texto - El texto del error
+*/
+function mostrarAlertaError(titulo, texto) {
+  Swal.fire({
+    title: titulo,
+    text: texto,
+    icon: null,
+    showConfirmButton: true,
+    confirmButtonText: 'Aceptar',
+    customClass: {
+      popup: 'swal2-no-icon'
+    },
+    didOpen: () => {
+      const icon = Swal.getIcon();
+      if (icon) icon.style.display = 'none';
+    }
+  });
 }
 
 // --- LOADER GLOBAL ---
@@ -258,7 +302,7 @@ function cargarArticulos() {
           </div>
           <div>
             <button class="btn btn-sm btn-outline-primary" onclick="prepararVariante('${escapeQuotes(articuloName)}',${articuloId})" data-bs-toggle="modal" data-bs-target="#modalVariante">+ Agregar Talle</button>
-            <button class="btn btn-sm btn-outline-secondary mx-1" onclick="cargarArticuloParaEditar(${articuloId}, '${escapeQuotes(articuloName)}', ${brandId},${categoryId}, '${escapeQuotes(articulo.description)}')" data-bs-toggle="modal" data-bs-target="#modalArticulo">✏️ Editar</button>
+            <button class="btn btn-sm btn-outline-secondary mx-1" onclick="cargarArticuloParaEditar(${articuloId}, '${escapeQuotes(articuloName)}', ${brandId},${categoryId}, '${escapeQuotes(articuloDescription)}')" data-bs-toggle="modal" data-bs-target="#modalArticulo">✏️ Editar</button>
             <button class="btn btn-sm btn-outline-danger" onclick="eliminarArticulo(${articuloId})">🗑️ Borrar</button>
           </div>
         </div>
@@ -290,10 +334,10 @@ function cargarArticulos() {
     listaCompras.appendChild(fragmentCompras);
     listaAdmin.appendChild(fragmentAdmin);
   })
-  .catch(error => {
-    console.error("Houston, tenemos un problema:", error);
-    Swal.fire('Error', 'No se pudieron cargar los artículos', 'error');
-  });
+.catch(error => {
+  console.error("Houston, tenemos un problema:", error);
+  mostrarAlertaError('Error', 'No se pudieron cargar los artículos');
+});
 }
 
 function filtrarCatalogo(idInput, idLista){
@@ -376,13 +420,13 @@ function buscarPorCodigoBarras(codigo, origen) {
 			mostrarSelectorVariantes(variantesEncontradas, origen);
 		}
 	})
-	.catch(error => {
-		if (origen === 'lector-codigo-admin') {
-			alert("Código nuevo no registrado.\nBusque el artículo en la lista y use '+ Agregar Talle' para asociar este código de barras.");
-		} else {
-			alert("El producto escaneado no existe en el sistema.");
-		}
-	});
+.catch(error => {
+  if (origen === 'lector-codigo-admin') {
+    mostrarAlertaError('Código no registrado', 'Busque el artículo en la lista y use \'+ Agregar Talle\' para asociar este código de barras.');
+  } else {
+    mostrarAlertaError('Producto no encontrado', 'El producto escaneado no existe en el sistema.');
+  }
+});
 }
 
 // Función auxiliar para procesar una variante escaneada (flujo directo)
@@ -440,9 +484,9 @@ function procesarVarianteEscaneada(variante, origen) {
 		setTimeout(() => {
 			document.getElementById('precio-compra-escaneado').focus();
 		}, 300);
-	} else if (origen === 'lector-codigo-admin') {
-		alert(`Prenda Escaneada: \n${nombreArt} - ${nombreMarca} \nTalle: ${talle} | Color: ${color} \nPrecio: $${precio} \nStock: ${stock}`);
-	}
+} else if (origen === 'lector-codigo-admin') {
+    mostrarAlertaExito('Prenda Escaneada', `${nombreArt} - ${nombreMarca}\nTalle: ${talle} | Color: ${color}\nPrecio: $${precio} | Stock: ${stock}`);
+  }
 }
 
 // Función para mostrar el selector de variantes cuando hay múltiples opciones
@@ -656,23 +700,23 @@ function cancelarEdicionArticulo() {
 }
 
 function eliminarArticulo(idArticulo){
-    Swal.fire({
-        title: '¿Borrar Artículo?',
-        text: "Se borrarán todos sus talles",
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: 'Sí, borrar todo'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            fetch(`/api/articulos/${idArticulo}`,{ method: 'DELETE' })
-            .then(res => res.text())
-.then(msg => {
-          Swal.fire('¡Borrado!', '', 'success');
-          cargarArticulos();
-        }).catch(e => Swal.fire('Error', 'No se pudo eliminar.', 'error'));
-        }
-    });
+  Swal.fire({
+    title: '¿Borrar Artículo?',
+    text: "Se borrarán todos sus talles",
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    cancelButtonColor: '#6c757d',
+    confirmButtonText: 'Sí, borrar todo'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      fetch(`/api/articulos/${idArticulo}`,{ method: 'DELETE' })
+      .then(res => res.text())
+      .then(msg => {
+        mostrarAlertaExito('¡Borrado!');
+        cargarArticulos();
+      }).catch(e => mostrarAlertaError('Error', 'No se pudo eliminar.'));
+    }
+  });
 }
 
 // -- VARIANTES --
@@ -708,14 +752,14 @@ function eliminarVariante(idArticulo, idVariante){
         confirmButtonText: 'Sí, borrar'
     }).then((result) => {
         if (result.isConfirmed) {
-            fetch(`/api/articulos/${idArticulo}/variantes/${idVariante}`, { method: 'DELETE' })
-            .then(res => res.text())
-.then(msg => {
-          Swal.fire('¡Borrada!', '', 'success');
-          cargarArticulos();
-        });
-        }
-    });
+      fetch(`/api/articulos/${idArticulo}/variantes/${idVariante}`, { method: 'DELETE' })
+      .then(res => res.text())
+      .then(msg => {
+        mostrarAlertaExito('¡Borrada!');
+        cargarArticulos();
+      });
+    }
+  });
 }
 
 // -- STOCK --
@@ -796,30 +840,30 @@ function cargarMarcas() {
 
     if(listaMarcas) listaMarcas.appendChild(fragment);
   })
-  .catch(error => {
-    console.error("Error al cargar marcas:", error);
-    Swal.fire('Error', 'No se pudieron cargar las marcas', 'error');
-  });
+.catch(error => {
+  console.error("Error al cargar marcas:", error);
+  mostrarAlertaError('Error', 'No se pudieron cargar las marcas');
+});
 }
 
 function eliminarMarca(idMarca){
-    Swal.fire({
-        title: '¿Borrar Marca?',
-        text: "Verificá que no tenga artículos asociados",
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: 'Sí, borrar'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            fetch(`/api/marcas/${idMarca}`,{ method: 'DELETE' })
-            .then(res => res.text())
-.then(msg => {
-          Swal.fire('¡Borrada!', '', 'success');
-          cargarMarcas();
-        });
-        }
-    });
+  Swal.fire({
+    title: '¿Borrar Marca?',
+    text: "Verificá que no tenga artículos asociados",
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    cancelButtonColor: '#6c757d',
+    confirmButtonText: 'Sí, borrar'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      fetch(`/api/marcas/${idMarca}`,{ method: 'DELETE' })
+      .then(res => res.text())
+      .then(msg => {
+        mostrarAlertaExito('¡Borrada!');
+        cargarMarcas();
+      });
+    }
+  });
 }
 
 // -- CATEGORIAS ARTICULOS --
@@ -887,29 +931,29 @@ function cargarCategoriasArticulos() {
   })
   .catch(error => {
     console.error("Error al cargar categorías:", error);
-    Swal.fire('Error', 'No se pudieron cargar las categorías', 'error');
+    mostrarAlertaError('Error', 'No se pudieron cargar las categorías');
   });
 }
 
 
 function eliminarCategoriaArticulo(idCategoria){
-    Swal.fire({
-        title: '¿Borrar Categoría?',
-        text: "Verificá que no tenga artículos asociados",
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: 'Sí, borrar'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            fetch(`/api/categorias-articulos/${idCategoria}`,{ method: 'DELETE' })
-            .then(res => res.text())
-            .then(msg => {
-                Swal.fire('¡Borrada!', 'success');
-                cargarCategoriasArticulos();
-            });
-        }
-    });
+  Swal.fire({
+    title: '¿Borrar Categoría?',
+    text: "Verificá que no tenga artículos asociados",
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    cancelButtonColor: '#6c757d',
+    confirmButtonText: 'Sí, borrar'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      fetch(`/api/categorias-articulos/${idCategoria}`,{ method: 'DELETE' })
+      .then(res => res.text())
+      .then(msg => {
+        mostrarAlertaExito('¡Borrada!');
+        cargarCategoriasArticulos();
+      });
+    }
+  });
 }
 
 // - GASTOS GENERALES -
@@ -950,32 +994,32 @@ function cargarCategoriasGastos() {
   })
   .catch(error => {
     console.error("Error al cargar categorías:", error);
-    Swal.fire('Error', 'No se pudieron cargar las categorías', 'error');
+    mostrarAlertaError('Error', 'No se pudieron cargar las categorías');
   });
 }
 
 function eliminarCategoriaGasto(idCategoria) {
-    Swal.fire({
-        title: '¿Estás seguro?',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: 'Sí, borrar',
-        cancelButtonText: 'Cancelar'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            fetch(`/api/categorias/${idCategoria}`, { method: 'DELETE' })
-            .then(respuesta => {
-                if(!respuesta.ok) throw new Error("Error al borrar");
-                return respuesta.text();
-            })
-.then(mensaje => {
-          Swal.fire('¡Borrada!', '', 'success');
-          cargarCategoriasGastos();
-        })
-            .catch(error => Swal.fire('Error', 'No se pudo eliminar la categoría.', 'error'));
-        }
-    });
+  Swal.fire({
+    title: '¿Estás seguro?',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    cancelButtonColor: '#6c757d',
+    confirmButtonText: 'Sí, borrar',
+    cancelButtonText: 'Cancelar'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      fetch(`/api/categorias/${idCategoria}`, { method: 'DELETE' })
+      .then(respuesta => {
+        if(!respuesta.ok) throw new Error("Error al borrar");
+        return respuesta.text();
+      })
+      .then(mensaje => {
+        mostrarAlertaExito('¡Borrada!');
+        cargarCategoriasGastos();
+      })
+      .catch(error => mostrarAlertaError('Error', 'No se pudo eliminar la categoría.'));
+    }
+  });
 }
 
 function cargarCategoriaGastoParaEditar(id, nombre) {
@@ -1027,26 +1071,26 @@ function cargarUltimosGastos() {
 }
 
 function eliminarGasto(idGasto){
-    Swal.fire({
-        title: '¿Borrar Gasto?',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: 'Sí, borrar'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            fetch(`/api/expensas/${idGasto}`,{ method: 'DELETE' })
-            .then(respuesta => {
-                if(!respuesta.ok) throw new Error("Error al eliminar");
-                return respuesta.text();
-            })
-.then(mensaje => {
-          Swal.fire('¡Borrada!', '', 'success');
-          cargarUltimosGastos();
-        })
-            .catch(error => Swal.fire('Error', 'No se pudo eliminar el gasto.', 'error'));
-        }
-    });
+  Swal.fire({
+    title: '¿Borrar Gasto?',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    cancelButtonColor: '#6c757d',
+    confirmButtonText: 'Sí, borrar'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      fetch(`/api/expensas/${idGasto}`,{ method: 'DELETE' })
+      .then(respuesta => {
+        if(!respuesta.ok) throw new Error("Error al eliminar");
+        return respuesta.text();
+      })
+      .then(mensaje => {
+        mostrarAlertaExito('¡Borrada!');
+        cargarUltimosGastos();
+      })
+      .catch(error => mostrarAlertaError('Error', 'No se pudo eliminar el gasto.'));
+    }
+  });
 }
 
 function cargarGastoParaEditar(id, categoriaId, monto, descripcion, fecha) {
@@ -1093,32 +1137,32 @@ function agregarAlCarrito(idVariante, nombre, marca, talle, color, precio, canti
 }
 
 function actualizarCarritoHTML(){
-    const listaHTML = document.getElementById("lista-carrito");
-    listaHTML.innerHTML = ''; 
+  const listaHTML = document.getElementById("lista-carrito");
+  
+  let totalGeneral = 0;
+  let htmlAcumulado = '';
 
-    let totalGeneral = 0;
+  carrito.forEach(item => {
+    let subtotal = item.quantity * item.price;
+    totalGeneral += subtotal;
 
-    carrito.forEach(item => {
-        let subtotal = item.quantity * item.price;
-        totalGeneral += subtotal;
-        
-        let textoHTML = `
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-            <div>
-                <h6 class="my-0">${item.name} <small class="text-muted">(${item.size} - ${item.color})</small></h6>
-                <small class="fw-bold text-success">$${subtotal}</small>
-            </div>
-            <div class="d-flex align-items-center">
-                <button class="btn btn-sm btn-outline-secondary px-2 py-0" onclick="cambiarCantidadCarrito(${item.idVariante}, -1)">-</button>
-                <span class="mx-2 fw-bold">${item.quantity}</span>
-                <button class="btn btn-sm btn-outline-secondary px-2 py-0" onclick="cambiarCantidadCarrito(${item.idVariante}, 1)">+</button>
-                <button class="btn btn-sm btn-danger ms-3 px-2 py-0" onclick="eliminarDelCarrito(${item.idVariante})">X</button>
-            </div>
-        </li>`;
-        listaHTML.innerHTML += textoHTML;
-    });
-
-    document.getElementById("total-carrito").innerText = totalGeneral;
+    htmlAcumulado += `
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      <div>
+        <h6 class="my-0">${item.name} <small class="text-muted">(${item.size} - ${item.color})</small></h6>
+        <small class="fw-bold text-success">$${subtotal}</small>
+      </div>
+      <div class="d-flex align-items-center">
+        <button class="btn btn-sm btn-outline-secondary px-2 py-0" onclick="cambiarCantidadCarrito(${item.idVariante}, -1)">-</button>
+        <span class="mx-2 fw-bold">${item.quantity}</span>
+        <button class="btn btn-sm btn-outline-secondary px-2 py-0" onclick="cambiarCantidadCarrito(${item.idVariante}, 1)">+</button>
+        <button class="btn btn-sm btn-danger ms-3 px-2 py-0" onclick="eliminarDelCarrito(${item.idVariante})">X</button>
+      </div>
+    </li>`;
+  });
+  
+  listaHTML.innerHTML = htmlAcumulado;
+  document.getElementById("total-carrito").innerText = totalGeneral;
 }
 
 function eliminarDelCarrito(idVariante) {
@@ -1173,32 +1217,32 @@ function agregarAlIngreso(idVariante, nombre, marca, talle, color, precio, canti
 }
 
 function actualizarIngresoHTML(){
-    const listaHTML = document.getElementById("lista-ingreso");
-    listaHTML.innerHTML = ''; 
+  const listaHTML = document.getElementById("lista-ingreso");
 
-    let totalGeneral = 0;
+  let totalGeneral = 0;
+  let htmlAcumulado = '';
 
-    ingreso.forEach(item => {
-        let subtotal = item.quantity * item.unitPrice;
-        totalGeneral += subtotal;
-        
-        let textoHTML = `
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-            <div>
-                <h6 class="my-0">${item.name} <small class="text-muted">(${item.size} - ${item.color})</small></h6>
-                <small class="fw-bold text-danger">$${subtotal}</small>
-            </div>
-            <div class="d-flex align-items-center">
-                <button class="btn btn-sm btn-outline-secondary px-2 py-0" onclick="cambiarCantidadIngreso(${item.idVariante}, -1)">-</button>
-                <span class="mx-2 fw-bold">${item.quantity}</span>
-                <button class="btn btn-sm btn-outline-secondary px-2 py-0" onclick="cambiarCantidadIngreso(${item.idVariante}, 1)">+</button>
-                <button class="btn btn-sm btn-danger ms-3 px-2 py-0" onclick="eliminarDelIngreso(${item.idVariante})">X</button>
-            </div>
-        </li>`;
-        listaHTML.innerHTML += textoHTML;
-    });
+  ingreso.forEach(item => {
+    let subtotal = item.quantity * item.unitPrice;
+    totalGeneral += subtotal;
 
-    document.getElementById("total-ingreso").innerText = totalGeneral;
+    htmlAcumulado += `
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      <div>
+        <h6 class="my-0">${item.name} <small class="text-muted">(${item.size} - ${item.color})</small></h6>
+        <small class="fw-bold text-danger">$${subtotal}</small>
+      </div>
+      <div class="d-flex align-items-center">
+        <button class="btn btn-sm btn-outline-secondary px-2 py-0" onclick="cambiarCantidadIngreso(${item.idVariante}, -1)">-</button>
+        <span class="mx-2 fw-bold">${item.quantity}</span>
+        <button class="btn btn-sm btn-outline-secondary px-2 py-0" onclick="cambiarCantidadIngreso(${item.idVariante}, 1)">+</button>
+        <button class="btn btn-sm btn-danger ms-3 px-2 py-0" onclick="eliminarDelIngreso(${item.idVariante})">X</button>
+      </div>
+    </li>`;
+  });
+  
+  listaHTML.innerHTML = htmlAcumulado;
+  document.getElementById("total-ingreso").innerText = totalGeneral;
 }
 
 function eliminarDelIngreso(idVariante) {
@@ -1518,78 +1562,84 @@ document.getElementById('formulario-articulo').addEventListener('submit', functi
     }
 
     //Envio
-    fetch(urlFetch, {
-        method: metodoHTTP,
-        headers: {
-            'Content-Type': 'application/json' // tipo JSON
-        },
-        // convierte el objeto JavaScript en texto que Java entiende
-        body: JSON.stringify(nuevoArticulo)
-    })
+  fetch(urlFetch, {
+    method: metodoHTTP,
+    headers: {
+      'Content-Type': 'application/json' // tipo JSON
+    },
+    // convierte el objeto JavaScript en texto que Java entiende
+    body: JSON.stringify(nuevoArticulo)
+  })
   .then(respuesta => {
     if(!respuesta.ok) throw new Error("Error en el servidor");
-    return respuesta.json();
+    return respuesta.text();
   })
-  .then(articuloGuardado => {
+  .then(mensaje => {
     // Cierra el Modal
     var modal = bootstrap.Modal.getInstance(document.getElementById('modalArticulo'));
     modal.hide();
 
-    Swal.fire('Artículo guardado', '', 'success');
+    mostrarAlertaExito('Artículo guardado');
     cancelarEdicionArticulo();
     cargarArticulos();
   })
-    .catch(error => console.error("Error al guardar:", error));
+  .catch(error => console.error("Error al guardar:", error));
 });
 
 
 // -- VARIANTES --
 document.getElementById('formulario-variante').addEventListener('submit', function(evento){
 
-    evento.preventDefault();
+  evento.preventDefault();
 
-    let codigoIngresado = document.getElementById('codigo-barras').value.trim();
+  // Validación: asegurar que hay un artículo seleccionado
+  if (!idArticuloEnMemoria) {
+    mostrarAlertaError('Error', 'No hay un artículo seleccionado. Por favor, seleccione un artículo primero.');
+    return;
+  }
 
-    const nuevaVariante = {
-        size: document.getElementById('talle').value,
-        color: document.getElementById('color').value,
-        price: document.getElementById('precio').value,
-        barCode: codigoIngresado === "" ? null : codigoIngresado
-    };
+  let codigoIngresado = document.getElementById('codigo-barras').value.trim();
 
-    //Modo creacion
-    let urlFetch = `/api/articulos/${idArticuloEnMemoria}/variantes`;
-    let metodoHTTP = 'POST';
+  const nuevaVariante = {
+    size: document.getElementById('talle').value,
+    color: document.getElementById('color').value,
+    price: document.getElementById('precio').value,
+    barCode: codigoIngresado === "" ? null : codigoIngresado
+  };
 
-    //Modo edicion
-    if(idVarianteEnEdicion !== null){
-        urlFetch = `/api/articulos/${idArticuloEnMemoria}/variantes/${idVarianteEnEdicion}`;
-        metodoHTTP = 'PUT';
-    }
+  //Modo creacion
+  let urlFetch = `/api/articulos/${idArticuloEnMemoria}/variantes`;
+  let metodoHTTP = 'POST';
+
+  //Modo edicion
+  if(idVarianteEnEdicion !== null){
+    urlFetch = `/api/articulos/${idArticuloEnMemoria}/variantes/${idVarianteEnEdicion}`;
+    metodoHTTP = 'PUT';
+  }
     
 
-    fetch(urlFetch, {
-        method: metodoHTTP,
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(nuevaVariante)
-    })
+  fetch(urlFetch, {
+    method: metodoHTTP,
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(nuevaVariante)
+  })
   .then(respuesta => {
     if(!respuesta.ok) throw new Error("Error en el servidor");
-    return respuesta.json();
+    return respuesta.text();
   })
-  .then(varianteGuardada => {
+  .then(mensaje => {
     var modal = bootstrap.Modal.getInstance(document.getElementById('modalVariante'));
     modal.hide();
 
-    Swal.fire('Variante guardada', '', 'success');
+    mostrarAlertaExito('Variante guardada');
 
     cancelarEdicionVariante();
     cargarArticulos();
 
   })
-    .catch(error => console.error("Error al guardar:", error));
+  .catch(error => console.error("Error al guardar:", error));
 
 });
 
@@ -1612,27 +1662,27 @@ document.getElementById('formulario-marca').addEventListener('submit', function(
         metodoHTTP = 'PUT';
     }
 
-    fetch(urlFetch, {
-        method: metodoHTTP,
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(nuevaMarca)
-    })
+  fetch(urlFetch, {
+    method: metodoHTTP,
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(nuevaMarca)
+  })
   .then(respuesta => {
     if(!respuesta.ok) throw new Error("Error en el servidor");
-    return respuesta.json();
+    return respuesta.text();
   })
-  .then(marcaGuardada => {
+  .then(mensaje => {
     var modal = bootstrap.Modal.getInstance(document.getElementById('modalMarca'));
     modal.hide();
 
-    Swal.fire('Marca guardada', '', 'success');
+    mostrarAlertaExito('Marca guardada');
 
     cancelarEdicionMarca();
     cargarMarcas();
   })
-    .catch(error => console.error("Error al guardar:", error));
+  .catch(error => console.error("Error al guardar:", error));
 });
 
 // -- CATEGORIAS --
@@ -1654,27 +1704,27 @@ document.getElementById('formulario-categoria-articulo').addEventListener('submi
         metodoHTTP = 'PUT';
     }
 
-    fetch(urlFetch, {
-        method: metodoHTTP,
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(nuevaCategoria)
-    })
+  fetch(urlFetch, {
+    method: metodoHTTP,
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(nuevaCategoria)
+  })
   .then(respuesta => {
     if(!respuesta.ok) throw new Error("Error en el servidor");
-    return respuesta.json();
+    return respuesta.text();
   })
-  .then(categoriaGuardada => {
+  .then(mensaje => {
     var modal = bootstrap.Modal.getInstance(document.getElementById('modalCategoriaArticulo'));
     modal.hide();
 
-    Swal.fire('Categoria guardada', '', 'success');
+    mostrarAlertaExito('Categoria guardada');
 
     cancelarEdicionCategoriaArticulo();
     cargarCategoriasArticulos();
   })
-    .catch(error => console.error("Error al guardar:", error));
+  .catch(error => console.error("Error al guardar:", error));
 });
 
 
