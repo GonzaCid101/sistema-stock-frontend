@@ -629,17 +629,18 @@ function cambiarPantalla(idPantallaDestino){
 }
 
 function cambiarSubPantallaReportes(idSubPantalla, botonClickeado){
-    document.querySelectorAll('.btn-reporte').forEach(btn => btn.classList.remove('active'));
-    if(botonClickeado) botonClickeado.classList.add('active');
+  document.querySelectorAll('.btn-reporte').forEach(btn => btn.classList.remove('active'));
+  if(botonClickeado) botonClickeado.classList.add('active');
 
-    let subPantallas = document.querySelectorAll('.sub-pantalla-reportes')
-    subPantallas.forEach(subPantalla => subPantalla.style.display = 'none');
-    document.getElementById(idSubPantalla).style.display = 'block';
+  let subPantallas = document.querySelectorAll('.sub-pantalla-reportes')
+  subPantallas.forEach(subPantalla => subPantalla.style.display = 'none');
+  document.getElementById(idSubPantalla).style.display = 'block';
 
-    if(idSubPantalla === 'sub-pantalla-ventas') cargarHistorialVentas();
-    else if(idSubPantalla === 'sub-pantalla-movimientos') cargarHistorialMovimientos();
-    else if(idSubPantalla === 'sub-pantalla-compras') cargarHistorialCompras();
-    else if(idSubPantalla === 'sub-pantalla-historial-gastos') cargarHistorialGastos();
+  if(idSubPantalla === 'sub-pantalla-ventas') cargarHistorialVentas();
+  else if(idSubPantalla === 'sub-pantalla-movimientos') cargarHistorialMovimientos();
+  else if(idSubPantalla === 'sub-pantalla-compras') cargarHistorialCompras();
+  else if(idSubPantalla === 'sub-pantalla-deudas') cargarDeudas();
+  else if(idSubPantalla === 'sub-pantalla-historial-gastos') cargarHistorialGastos();
 }
 
 function cambiarSubPantallaAdmin(idSubPantalla){
@@ -1357,12 +1358,7 @@ function cargarHistorialCompras(mesFiltro) {
       const pagado = compra.paidAmount || 0;
       const deuda = compra.pendingAmount || 0;
 
-      // Botón de registrar pago solo si está pendiente
-      let botonPago = '';
-      if (compra.status === 'PENDIENTE') {
-        botonPago = `<button class="btn btn-sm btn-success" onclick="abrirModalPago(${compra.id}, '${escapeQuotes(compra.supplier)}', '${escapeQuotes(compra.invoiceNumber || '-')}', ${compra.totalAmount}, ${deuda})">💰 Pagar</button>`;
-      }
-
+      // En el historial de compras NO se muestra el botón de pagar (solo lectura)
       filasHTML += `<tr>
         <td>${compra.id}</td>
         <td>${new Date(compra.date).toLocaleString('es-AR')}</td>
@@ -1372,7 +1368,6 @@ function cargarHistorialCompras(mesFiltro) {
         <td class="text-success">$${pagado.toFixed(2)}</td>
         <td class="text-danger">$${deuda.toFixed(2)}</td>
         <td>${badgeEstado}</td>
-        <td>${botonPago}</td>
       </tr>`;
     });
     tbody.innerHTML = filasHTML;
@@ -1460,6 +1455,65 @@ function confirmarPagoCompra() {
       icon: 'error'
     });
   });
+}
+
+// Función para cargar deudas pendientes con proveedores
+function cargarDeudas() {
+  fetch('/api/compras')
+  .then(respuesta => respuesta.json())
+  .then(compras => {
+    const tbody = document.getElementById('tbody-deudas');
+    const tablaDeudas = document.getElementById('tabla-deudas');
+    const mensajeVacio = document.getElementById('mensaje-sin-deudas');
+    const resumenTotal = document.getElementById('resumen-total-deudas');
+    const resumenCantidad = document.getElementById('resumen-cantidad-deudas');
+
+    tbody.innerHTML = '';
+
+    // Filtrar solo las compras pendientes
+    const deudas = compras.filter(c => c.status === 'PENDIENTE');
+
+    // Ordenar por fecha ascendente (más antiguas primero)
+    deudas.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // Calcular totales
+    const totalDeuda = deudas.reduce((sum, d) => sum + (d.pendingAmount || 0), 0);
+    const cantidadDeudas = deudas.length;
+
+    // Actualizar panel de resumen
+    resumenTotal.innerText = totalDeuda.toFixed(2);
+    resumenCantidad.innerText = cantidadDeudas;
+
+    if (deudas.length === 0) {
+      tablaDeudas.style.display = 'none';
+      mensajeVacio.style.display = 'block';
+    } else {
+      tablaDeudas.style.display = 'table';
+      mensajeVacio.style.display = 'none';
+    }
+
+    let filasHTML = '';
+    deudas.slice(0, 150).forEach(compra => {
+      const pagado = compra.paidAmount || 0;
+      const deuda = compra.pendingAmount || 0;
+
+      // Botón de pagar siempre visible en la pantalla de deudas
+      let botonPago = `<button class="btn btn-sm btn-success" onclick="abrirModalPago(${compra.id}, '${escapeQuotes(compra.supplier)}', '${escapeQuotes(compra.invoiceNumber || '-')}', ${compra.totalAmount}, ${deuda})">💰 Pagar</button>`;
+
+      filasHTML += `<tr>
+        <td>${compra.id}</td>
+        <td>${new Date(compra.date).toLocaleString('es-AR')}</td>
+        <td>${sanitizeText(compra.supplier)}</td>
+        <td>${sanitizeText(compra.invoiceNumber || '-')}</td>
+        <td class="fw-bold">$${compra.totalAmount}</td>
+        <td class="text-success">$${pagado.toFixed(2)}</td>
+        <td class="text-danger fw-bold">$${deuda.toFixed(2)}</td>
+        <td>${botonPago}</td>
+      </tr>`;
+    });
+    tbody.innerHTML = filasHTML;
+  })
+  .catch(error => console.error("Error al cargar las deudas:", error));
 }
 
 function cargarHistorialMovimientos(mesFiltro) {

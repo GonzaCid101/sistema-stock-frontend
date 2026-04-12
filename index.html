@@ -558,13 +558,14 @@
             <div id="pantalla-reportes" class="pantalla-sistema" style="display: none;">
                 <h2 class="mb-4">Historial de Movimientos y Balances</h2>
                 
-                <ul class="nav nav-pills mb-4 bg-white p-2 rounded shadow-sm">
-                    <li class="nav-item"><button class="nav-link active btn-reporte" onclick="cambiarSubPantallaReportes('sub-pantalla-ventas', this)">Ventas</button></li>
-                    <li class="nav-item"><button class="nav-link btn-reporte" onclick="cambiarSubPantallaReportes('sub-pantalla-compras', this)">Compras</button></li>
-                    <li class="nav-item"><button class="nav-link btn-reporte" onclick="cambiarSubPantallaReportes('sub-pantalla-movimientos', this)">Movimientos</button></li>
-                    <li class="nav-item"><button class="nav-link btn-reporte" onclick="cambiarSubPantallaReportes('sub-pantalla-historial-gastos', this)">Gastos Generales</button></li>
-                    <li class="nav-item"><button class="nav-link btn-reporte text-success fw-bold" onclick="cambiarSubPantallaReportes('sub-pantalla-balances', this)">Balances Financieros</button></li>
-                </ul>
+<ul class="nav nav-pills mb-4 bg-white p-2 rounded shadow-sm">
+          <li class="nav-item"><button class="nav-link active btn-reporte" onclick="cambiarSubPantallaReportes('sub-pantalla-ventas', this)">Ventas</button></li>
+          <li class="nav-item"><button class="nav-link btn-reporte" onclick="cambiarSubPantallaReportes('sub-pantalla-compras', this)">Compras</button></li>
+          <li class="nav-item"><button class="nav-link btn-reporte text-danger fw-bold" onclick="cambiarSubPantallaReportes('sub-pantalla-deudas', this)">💳 Deudas a Proveedores</button></li>
+          <li class="nav-item"><button class="nav-link btn-reporte" onclick="cambiarSubPantallaReportes('sub-pantalla-movimientos', this)">Movimientos</button></li>
+          <li class="nav-item"><button class="nav-link btn-reporte" onclick="cambiarSubPantallaReportes('sub-pantalla-historial-gastos', this)">Gastos Generales</button></li>
+          <li class="nav-item"><button class="nav-link btn-reporte text-success fw-bold" onclick="cambiarSubPantallaReportes('sub-pantalla-balances', this)">Balances Financieros</button></li>
+        </ul>
 
                 <div class="card shadow-sm p-4">
 <div id="sub-pantalla-ventas" class="sub-pantalla-reportes">
@@ -584,22 +585,54 @@
     </div>
 
 <div id="sub-pantalla-compras" class="sub-pantalla-reportes" style="display: none;">
-      <form id="form-filtro-compras" class="d-flex flex-column flex-sm-row gap-2 mb-4 w-100">
-        <input type="month" id="mesAnio-compras" class="form-control" required>
-        <button type="submit" class="btn btn-primary">Filtrar</button>
-      </form>
-      <p id="mensaje-sin-compras" class="text-muted fst-italic text-center" style="display: none;">No hay compras registradas para este período.</p>
-            <div class="table-responsive">
-              <table id="tabla-compras" class="table table-hover table-striped align-middle" style="display: none;">
-                <thead class="table-dark">
-                  <tr><th>N° Op</th><th>Fecha</th><th>Proveedor</th><th>N° Factura</th><th>Total</th><th>Pagado</th><th>Deuda</th><th>Estado</th><th>Acciones</th></tr>
-                </thead>
-                <tbody id="tbody-historial-compras"></tbody>
-              </table>
-            </div>
-    </div>
+          <form id="form-filtro-compras" class="d-flex flex-column flex-sm-row gap-2 mb-4 w-100">
+            <input type="month" id="mesAnio-compras" class="form-control" required>
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+          </form>
+          <p id="mensaje-sin-compras" class="text-muted fst-italic text-center" style="display: none;">No hay compras registradas para este período.</p>
+          <div class="table-responsive">
+            <table id="tabla-compras" class="table table-hover table-striped align-middle" style="display: none;">
+              <thead class="table-dark">
+                <tr><th>N° Op</th><th>Fecha</th><th>Proveedor</th><th>N° Factura</th><th>Total</th><th>Pagado</th><th>Deuda</th><th>Estado</th></tr>
+              </thead>
+              <tbody id="tbody-historial-compras"></tbody>
+            </table>
+          </div>
+        </div>
 
-<div id="sub-pantalla-movimientos" class="sub-pantalla-reportes" style="display: none;">
+        <div id="sub-pantalla-deudas" class="sub-pantalla-reportes" style="display: none;">
+          <!-- Panel de resumen de deudas -->
+          <div class="row mb-4">
+            <div class="col-md-6">
+              <div class="card border-danger shadow-sm">
+                <div class="card-body text-center">
+                  <h5 class="text-danger">Total Adeudado</h5>
+                  <h3 class="fw-bold text-danger">$<span id="resumen-total-deudas">0.00</span></h3>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="card border-warning shadow-sm">
+                <div class="card-body text-center">
+                  <h5 class="text-warning">Facturas Pendientes</h5>
+                  <h3 class="fw-bold text-warning"><span id="resumen-cantidad-deudas">0</span></h3>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p id="mensaje-sin-deudas" class="text-muted fst-italic text-center" style="display: none;">No hay deudas pendientes con proveedores.</p>
+          <div class="table-responsive">
+            <table id="tabla-deudas" class="table table-hover table-striped align-middle" style="display: none;">
+              <thead class="table-dark">
+                <tr><th>N° Op</th><th>Fecha</th><th>Proveedor</th><th>N° Factura</th><th>Total</th><th>Pagado</th><th>Deuda</th><th>Acciones</th></tr>
+              </thead>
+              <tbody id="tbody-deudas"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="sub-pantalla-movimientos" class="sub-pantalla-reportes" style="display: none;">
       <form id="form-filtro-movimientos" class="d-flex flex-column flex-sm-row gap-2 mb-4 w-100">
         <input type="month" id="mesAnio-movimientos" class="form-control" required>
         <button type="submit" class="btn btn-primary">Filtrar</button>
