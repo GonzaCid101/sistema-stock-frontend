@@ -1318,42 +1318,148 @@ function cargarHistorialVentas(mesFiltro) {
 }
 
 function cargarHistorialCompras(mesFiltro) {
-    let url = '/api/compras';
-    if (mesFiltro) {
-        let partes = mesFiltro.split('-'); 
-        url += `?anio=${partes[0]}&mes=${partes[1]}`;
+  let url = '/api/compras';
+  if (mesFiltro) {
+    let partes = mesFiltro.split('-');
+    url += `?anio=${partes[0]}&mes=${partes[1]}`;
+  }
+
+  fetch(url)
+  .then(respuesta => respuesta.json())
+  .then(compras => {
+    const tbody = document.getElementById('tbody-historial-compras');
+    const tablaCompras = document.getElementById('tabla-compras');
+    const mensajeVacio = document.getElementById('mensaje-sin-compras');
+
+    tbody.innerHTML = '';
+
+    if (compras.length === 0) {
+      tablaCompras.style.display = 'none';
+      mensajeVacio.style.display = 'block';
+    } else{
+      tablaCompras.style.display = 'table';
+      mensajeVacio.style.display = 'none';
     }
 
-    fetch(url)
-        .then(respuesta => respuesta.json())
-        .then(compras => {
-            const tbody = document.getElementById('tbody-historial-compras');
-            const tablaCompras = document.getElementById('tabla-compras');
-            const mensajeVacio = document.getElementById('mensaje-sin-compras');
+    let filasHTML = '';
+    compras.slice(0, 150).forEach(compra => {
+      // Calcular badge de estado
+      let badgeEstado = '';
+      if (compra.status === 'PAGADA') {
+        badgeEstado = '<span class="badge bg-success">PAGADA</span>';
+      } else if (compra.status === 'PENDIENTE') {
+        badgeEstado = '<span class="badge bg-warning text-dark">PENDIENTE</span>';
+      } else if (compra.status === 'ANULADA') {
+        badgeEstado = '<span class="badge bg-danger">ANULADA</span>';
+      }
 
-            tbody.innerHTML = '';
-            
-            if (compras.length === 0) {
-                tablaCompras.style.display = 'none';
-                mensajeVacio.style.display = 'block';
-            } else{
-                tablaCompras.style.display = 'table';
-                mensajeVacio.style.display = 'none';
-            }
+      // Calcular montos pagado y deuda
+      const pagado = compra.paidAmount || 0;
+      const deuda = compra.pendingAmount || 0;
 
-            let filasHTML = '';
-            compras.slice(0, 150).forEach(compra => { // Limitar a los últimos 500 registros
-                let listaDetalles = '';
-                compra.details.forEach(detalle => {
-                    listaDetalles += `${detalle.quantity}x  ${detalle.variant.articleName} - Talle: ${detalle.variant.size} (${detalle.variant.color}) - $${detalle.unitPrice*detalle.quantity} <br>`
-                });
-                filasHTML += `<tr>
-                <td>${compra.id}</td><td>${new Date(compra.date).toLocaleString('es-AR')}</td><td>${compra.paymentMethod}</td><td>${listaDetalles}</td><td>$${compra.totalAmount}</td>
-                </tr>`;
-            });
-            tbody.innerHTML = filasHTML;
-        })
-        .catch(error => console.error("Error al cargar el historial:", error));
+      // Botón de registrar pago solo si está pendiente
+      let botonPago = '';
+      if (compra.status === 'PENDIENTE') {
+        botonPago = `<button class="btn btn-sm btn-success" onclick="abrirModalPago(${compra.id}, '${escapeQuotes(compra.supplier)}', '${escapeQuotes(compra.invoiceNumber || '-')}', ${compra.totalAmount}, ${deuda})">💰 Pagar</button>`;
+      }
+
+      filasHTML += `<tr>
+        <td>${compra.id}</td>
+        <td>${new Date(compra.date).toLocaleString('es-AR')}</td>
+        <td>${sanitizeText(compra.supplier)}</td>
+        <td>${sanitizeText(compra.invoiceNumber || '-')}</td>
+        <td class="fw-bold">$${compra.totalAmount}</td>
+        <td class="text-success">$${pagado.toFixed(2)}</td>
+        <td class="text-danger">$${deuda.toFixed(2)}</td>
+        <td>${badgeEstado}</td>
+        <td>${botonPago}</td>
+      </tr>`;
+    });
+    tbody.innerHTML = filasHTML;
+  })
+  .catch(error => console.error("Error al cargar el historial:", error));
+}
+
+// Función para abrir el modal de pago
+function abrirModalPago(compraId, proveedor, numeroFactura, total, deuda) {
+  document.getElementById('pago-compra-id').value = compraId;
+  document.getElementById('pago-proveedor-nombre').innerText = proveedor;
+  document.getElementById('pago-factura-numero').innerText = numeroFactura;
+  document.getElementById('pago-total-compra').innerText = '$' + total.toFixed(2);
+  document.getElementById('pago-deuda-pendiente').innerText = '$' + deuda.toFixed(2);
+  document.getElementById('monto-pago').value = '';
+  document.getElementById('metodo-pago-parcial').value = 'EFECTIVO';
+
+  var modal = new bootstrap.Modal(document.getElementById('modalRegistrarPago'));
+  modal.show();
+
+  // Enfocar el campo de monto después de abrir
+  setTimeout(() => {
+    document.getElementById('monto-pago').focus();
+  }, 300);
+}
+
+// Función para confirmar el pago
+function confirmarPagoCompra() {
+  const compraId = document.getElementById('pago-compra-id').value;
+  const monto = parseFloat(document.getElementById('monto-pago').value);
+  const metodoPago = document.getElementById('metodo-pago-parcial').value;
+
+  // Validaciones
+  if (isNaN(monto) || monto <= 0) {
+    Swal.fire({
+      title: 'Error',
+      text: 'Ingrese un monto válido mayor a cero',
+      icon: 'error'
+    });
+    return;
+  }
+
+  const pagoPayload = {
+    amount: monto,
+    paymentMethod: metodoPago
+  };
+
+  fetch(`/api/compras/${compraId}/pagos`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(pagoPayload)
+  })
+  .then(respuesta => {
+    if (!respuesta.ok) {
+      return respuesta.text().then(text => {
+        throw new Error(text || 'Error al registrar el pago');
+      });
+    }
+    return respuesta.json();
+  })
+  .then(compraActualizada => {
+    // Cerrar modal
+    var modal = bootstrap.Modal.getInstance(document.getElementById('modalRegistrarPago'));
+    modal.hide();
+
+    // Mostrar éxito
+    Swal.fire({
+      title: '¡Pago registrado!',
+      text: `Se registró un pago de $${monto.toFixed(2)}. Deuda restante: $${compraActualizada.pendingAmount.toFixed(2)}`,
+      icon: 'success',
+      timer: 2000,
+      showConfirmButton: false
+    });
+
+    // Recargar tabla
+    const mesActual = document.getElementById('mesAnio-compras').value;
+    cargarHistorialCompras(mesActual);
+  })
+  .catch(error => {
+    Swal.fire({
+      title: 'Error',
+      text: error.message,
+      icon: 'error'
+    });
+  });
 }
 
 function cargarHistorialMovimientos(mesFiltro) {
@@ -1904,10 +2010,28 @@ document.getElementById('btn-pagar').addEventListener('click',function() {
             itemsJava.push(itemBackend);
         });
         
-        const ingresoPayload = {
-            metodoPago: document.getElementById('metodo-pago-compra').value,
-            items: itemsJava
-        };
+    const proveedor = document.getElementById('proveedor-compra').value.trim();
+    const numeroFactura = document.getElementById('numero-factura-compra').value.trim();
+
+    // Validar campos requeridos
+    if (!proveedor) {
+      alert("Por favor ingrese el proveedor.");
+      document.getElementById('proveedor-compra').focus();
+      return;
+    }
+
+    if (!numeroFactura) {
+      alert("Por favor ingrese el número de factura.");
+      document.getElementById('numero-factura-compra').focus();
+      return;
+    }
+
+    const ingresoPayload = {
+      metodoPago: document.getElementById('metodo-pago-compra').value,
+      supplier: proveedor,
+      invoiceNumber: numeroFactura,
+      items: itemsJava
+    };
 
         fetch('/api/compras', {
             method: 'POST',
@@ -1920,16 +2044,28 @@ document.getElementById('btn-pagar').addEventListener('click',function() {
             if(!respuesta.ok) throw new Error("Error del servidor.")
             return respuesta.text();
         })
-        .then(mensajeDelServidor => {
-            alert(mensajeDelServidor);
+  .then(mensajeDelServidor => {
+      alert(mensajeDelServidor);
 
-            ingreso = [];
+      ingreso = [];
 
-            actualizarIngresoHTML();
+      // Limpiar campos del formulario
+      document.getElementById('proveedor-compra').value = '';
+      document.getElementById('numero-factura-compra').value = '';
 
-            cargarArticulos();
-        })
+      actualizarIngresoHTML();
+
+      cargarArticulos();
+    })
         .catch(error => console.error("Error al pagar: ",error));
+});
+
+// -- EVENTOS PARA MODAL DE REGISTRAR PAGO --
+document.getElementById('monto-pago').addEventListener('keypress', function(evento) {
+  if (evento.key === 'Enter') {
+    evento.preventDefault();
+    confirmarPagoCompra();
+  }
 });
 
 // -- EVENTOS PARA MODAL DE COMPRA ESCANEADA --
