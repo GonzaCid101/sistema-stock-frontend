@@ -1576,6 +1576,9 @@ function actualizarResumenDeudas() {
   }
 }
 
+// Variable global para cache de deudas (para historial de pagos)
+let cacheDeudas = [];
+
 // Función para cargar deudas pendientes con proveedores
 function cargarDeudas() {
   fetch('/api/compras')
@@ -1591,6 +1594,9 @@ function cargarDeudas() {
 
     // Filtrar solo las compras pendientes
     const deudas = compras.filter(c => c.status === 'PENDIENTE');
+    
+    // Guardar en cache global para uso del historial de pagos
+    cacheDeudas = deudas;
 
     // Ordenar por fecha ascendente (más antiguas primero)
     deudas.sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -1615,11 +1621,17 @@ function cargarDeudas() {
     deudas.slice(0, 150).forEach(compra => {
       const pagado = compra.paidAmount || 0;
       const deuda = compra.pendingAmount || 0;
+      const cantidadPagos = compra.payments ? compra.payments.length : 0;
 
-      // Botón de pagar siempre visible en la pantalla de deudas
-      let botonPago = `<button class="btn btn-sm btn-success" onclick="abrirModalPago(${compra.id}, '${escapeQuotes(compra.supplier)}', '${escapeQuotes(compra.invoiceNumber || '-')}', ${compra.totalAmount}, ${deuda})">💰 Pagar</button>`;
+      // Botones de acción: Ver historial y Pagar
+      let botonesAccion = `
+        <button class="btn btn-sm btn-info me-1" onclick="verHistorialPagos(${compra.id})" title="Ver historial de pagos">
+          👁️ Pagos ${cantidadPagos > 0 ? `<span class="badge bg-light text-dark">${cantidadPagos}</span>` : ''}
+        </button>
+        <button class="btn btn-sm btn-success" onclick="abrirModalPago(${compra.id}, '${escapeQuotes(compra.supplier)}', '${escapeQuotes(compra.invoiceNumber || '-')}', ${compra.totalAmount}, ${deuda})">💰 Pagar</button>
+      `;
 
-    filasHTML += `<tr id="deuda-row-${compra.id}">
+      filasHTML += `<tr id="deuda-row-${compra.id}">
           <td>${compra.id}</td>
           <td>${new Date(compra.date).toLocaleString('es-AR')}</td>
           <td>${sanitizeText(compra.supplier)}</td>
@@ -1627,12 +1639,67 @@ function cargarDeudas() {
           <td class="fw-bold">$${compra.totalAmount}</td>
           <td id="deuda-pagado-${compra.id}" class="text-success">$${pagado.toFixed(2)}</td>
           <td id="deuda-pendiente-${compra.id}" class="text-danger fw-bold">$${deuda.toFixed(2)}</td>
-          <td id="deuda-accion-${compra.id}">${botonPago}</td>
+          <td id="deuda-accion-${compra.id}">${botonesAccion}</td>
         </tr>`;
     });
     tbody.innerHTML = filasHTML;
   })
   .catch(error => console.error("Error al cargar las deudas:", error));
+}
+
+// Función para ver historial de pagos de una compra
+function verHistorialPagos(compraId) {
+  // Buscar la compra en el cache de deudas
+  const compra = cacheDeudas.find(c => c.id === compraId);
+  
+  if (!compra) {
+    Swal.fire({
+      title: 'Error',
+      text: 'No se encontró la información de la deuda',
+      icon: 'error'
+    });
+    return;
+  }
+
+  // Actualizar información del modal
+  document.getElementById('historial-proveedor').innerText = compra.supplier || '-';
+  document.getElementById('historial-factura').innerText = compra.invoiceNumber || '-';
+  document.getElementById('historial-total').innerText = `$${(compra.totalAmount || 0).toFixed(2)}`;
+
+  // Construir tabla de pagos
+  const tbody = document.getElementById('tbody-historial-pagos');
+  const mensajeSinPagos = document.getElementById('mensaje-sin-pagos');
+  
+  if (!compra.payments || compra.payments.length === 0) {
+    tbody.innerHTML = '';
+    mensajeSinPagos.style.display = 'block';
+    document.getElementById('historial-total-pagado').innerText = '$0.00';
+  } else {
+    mensajeSinPagos.style.display = 'none';
+    let filasHTML = '';
+    let totalPagado = 0;
+
+    compra.payments.forEach((pago, index) => {
+      totalPagado += (pago.amount || 0);
+      const fechaPago = pago.paymentDate ? new Date(pago.paymentDate).toLocaleString('es-AR') : '-';
+      const metodoPago = pago.paymentMethod || '-';
+      const montoPago = (pago.amount || 0).toFixed(2);
+
+      filasHTML += `<tr>
+          <td>${index + 1}</td>
+          <td>${fechaPago}</td>
+          <td><span class="badge bg-secondary">${metodoPago}</span></td>
+          <td class="text-end fw-bold">$${montoPago}</td>
+        </tr>`;
+    });
+
+    tbody.innerHTML = filasHTML;
+    document.getElementById('historial-total-pagado').innerText = `$${totalPagado.toFixed(2)}`;
+  }
+
+  // Abrir el modal
+  const modal = new bootstrap.Modal(document.getElementById('modalHistorialPagos'));
+  modal.show();
 }
 
 function cargarHistorialMovimientos(mesFiltro) {
@@ -1818,29 +1885,31 @@ document.getElementById('formulario-login').addEventListener('submit', function(
 
 // Recibe el momento cuando se intenta subir el formulario
 document.getElementById('formulario-articulo').addEventListener('submit', function(evento) {
-    
-    // Frena la recarga de la página
-    evento.preventDefault();
 
-    // Arma el objeto JavaScript con lo que el usuario escribió
-    const nuevoArticulo = {
-        name: document.getElementById('nombre').value,
-        brandId: parseInt(document.getElementById('marca-articulo').value),
-        categoryId: parseInt(document.getElementById('categoria-articulo').value),
-        description: document.getElementById('descripcion').value
-    };
+  // Frena la recarga de la página
+  evento.preventDefault();
 
-    // Modo creacion
-    let urlFetch = '/api/articulos';
-    let metodoHTTP = 'POST';
+  // Arma el objeto JavaScript con lo que el usuario escribió
+  const nuevoArticulo = {
+    name: document.getElementById('nombre').value,
+    brandId: parseInt(document.getElementById('marca-articulo').value),
+    categoryId: parseInt(document.getElementById('categoria-articulo').value),
+    description: document.getElementById('descripcion').value
+  };
 
-    //Modo edicion
-    if(idArticuloEnEdicion !== null) {
-        urlFetch = `/api/articulos/${idArticuloEnEdicion}`;
-        metodoHTTP = 'PUT'; //Actualizar
-    }
+  // Modo creacion
+  let urlFetch = '/api/articulos';
+  let metodoHTTP = 'POST';
+  let esModoEdicion = false;
 
-    //Envio
+  //Modo edicion
+  if(idArticuloEnEdicion !== null) {
+    urlFetch = `/api/articulos/${idArticuloEnEdicion}`;
+    metodoHTTP = 'PUT'; //Actualizar
+    esModoEdicion = true;
+  }
+
+  //Envio
   fetch(urlFetch, {
     method: metodoHTTP,
     headers: {
@@ -1851,18 +1920,63 @@ document.getElementById('formulario-articulo').addEventListener('submit', functi
   })
   .then(respuesta => {
     if(!respuesta.ok) throw new Error("Error en el servidor");
-    return respuesta.text();
+    return respuesta.json(); // Cambiado a json() para obtener el objeto
   })
-  .then(mensaje => {
+  .then(articuloGuardado => {
     // Cierra el Modal
     var modal = bootstrap.Modal.getInstance(document.getElementById('modalArticulo'));
     modal.hide();
 
     mostrarAlertaExito('Artículo guardado');
     cancelarEdicionArticulo();
-    cargarArticulos();
+
+    // Optimistic UI: Actualizar DOM directamente sin recargar
+    const listaAdmin = document.getElementById('catalogo-admin');
+    if (listaAdmin) {
+      const articuloName = sanitizeText(articuloGuardado.name);
+      const articuloBrand = sanitizeText(articuloGuardado.brand?.name || '');
+      const articuloDescription = sanitizeText(articuloGuardado.description || '');
+      const articuloId = parseInt(articuloGuardado.id);
+      const brandId = parseInt(articuloGuardado.brand?.id || 0);
+      const categoryId = parseInt(articuloGuardado.category?.id || 0);
+      const categoryName = sanitizeText(articuloGuardado.category?.name || '');
+
+      if (esModoEdicion) {
+        // Modo edición: Actualizar el elemento existente
+        const articuloExistente = listaAdmin.querySelector(`li[data-articulo-id="${articuloId}"]`);
+        if (articuloExistente) {
+          // Actualizar los textos del artículo
+          articuloExistente.setAttribute('data-marca', brandId);
+          articuloExistente.setAttribute('data-categoria', categoryId);
+          
+          const strongNombre = articuloExistente.querySelector('strong');
+          if (strongNombre) strongNombre.innerText = articuloName;
+          
+          const badges = articuloExistente.querySelectorAll('.badge');
+          if (badges.length >= 1) badges[0].innerText = articuloBrand;
+          if (badges.length >= 2) badges[1].innerText = categoryName;
+          
+          const pDesc = articuloExistente.querySelector('p.text-muted');
+          if (pDesc) pDesc.innerText = articuloDescription;
+          
+          // Actualizar onclick handlers
+          const btnAgregar = articuloExistente.querySelector('.btn-outline-primary');
+          if (btnAgregar) btnAgregar.setAttribute('onclick', `prepararVariante('${escapeQuotes(articuloName)}',${articuloId})`);
+          
+          const btnEditar = articuloExistente.querySelector('.btn-outline-secondary');
+          if (btnEditar) btnEditar.setAttribute('onclick', `cargarArticuloParaEditar(${articuloId}, '${escapeQuotes(articuloName)}', ${brandId},${categoryId}, '${escapeQuotes(articuloDescription)}')`);
+        }
+      } else {
+        // Modo creación: Insertar nuevo artículo
+        const nuevoArticuloHTML = crearElementoAdmin(articuloGuardado, articuloName, articuloBrand, articuloDescription, articuloId, brandId, categoryId, categoryName);
+        listaAdmin.insertAdjacentElement('afterbegin', nuevoArticuloHTML);
+      }
+    }
   })
-  .catch(error => console.error("Error al guardar:", error));
+  .catch(error => {
+    console.error("Error al guardar:", error);
+    cargarArticulos(); // Solo en caso de error
+  });
 });
 
 
@@ -1906,40 +2020,77 @@ document.getElementById('formulario-variante').addEventListener('submit', functi
   })
   .then(respuesta => {
     if(!respuesta.ok) throw new Error("Error en el servidor");
-    return respuesta.text();
+    return respuesta.json(); // Cambiado a json() para obtener la variante creada
   })
-  .then(mensaje => {
+  .then(varianteCreada => {
     var modal = bootstrap.Modal.getInstance(document.getElementById('modalVariante'));
     modal.hide();
 
     mostrarAlertaExito('Variante guardada');
-
     cancelarEdicionVariante();
-    cargarArticulos();
 
+    // Optimistic UI: Agregar la nueva variante directamente al DOM sin recargar
+    if (varianteCreada && idArticuloEnMemoria) {
+      const listaAdmin = document.getElementById('catalogo-admin');
+      if (listaAdmin) {
+        // Buscar el artículo padre en el DOM
+        const articuloLi = listaAdmin.querySelector(`li.list-group-item[data-articulo-id="${idArticuloEnMemoria}"]`);
+        if (articuloLi) {
+          const ulVariantes = articuloLi.querySelector('ul.list-group');
+          if (ulVariantes) {
+            const vSize = sanitizeText(varianteCreada.size);
+            const vColor = sanitizeText(varianteCreada.color);
+            const vPrice = parseFloat(varianteCreada.price);
+            const vStock = parseInt(varianteCreada.stock) || 0;
+            const vId = parseInt(varianteCreada.id);
+            const vBarCode = escapeQuotes(varianteCreada.barCode || '');
+
+            const nuevaFilaHTML = `<li class="list-group-item d-flex justify-content-between align-items-center bg-light" data-variante-id="${vId}">
+              <span>Talle: <strong>${vSize}</strong> | Color: <strong>${vColor}</strong> | Precio: ${vPrice} | Stock: <span id="stock-badge-${vId}" class="badge ${vStock > 0 ? 'bg-success' : 'bg-danger'}">${vStock}</span></span>
+              <div>
+                <button class="btn btn-sm btn-warning me-1" onclick="prepararStock(${vId},'${escapeQuotes(articuloLi.querySelector('strong').innerText)}','${escapeQuotes(vSize)}')" data-bs-toggle="modal" data-bs-target="#modalStock">📦 Stock</button>
+                <button class="btn btn-sm btn-outline-secondary me-1" onclick="cargarVarianteParaEditar(${idArticuloEnMemoria},${vId}, '${escapeQuotes(vSize)}', '${escapeQuotes(vColor)}', ${vPrice}, '${vBarCode}')" data-bs-toggle="modal" data-bs-target="#modalVariante">✏️</button>
+                <button class="btn btn-sm btn-outline-danger" onclick="eliminarVariante(${idArticuloEnMemoria}, ${vId}, this)">🗑️</button>
+              </div>
+            </li>`;
+            
+            ulVariantes.insertAdjacentHTML('beforeend', nuevaFilaHTML);
+          }
+        }
+      }
+    }
   })
-  .catch(error => console.error("Error al guardar:", error));
+  .catch(error => {
+    console.error("Error al guardar:", error);
+    // En caso de error, recargar para sincronizar
+    cargarArticulos();
+  });
 
 });
 
 // -- MARCAS --
 document.getElementById('formulario-marca').addEventListener('submit', function(evento) {
-    evento.preventDefault();
+  evento.preventDefault();
 
-    const nuevaMarca = {
-        name: document.getElementById('nombre-marca').value,
-        description: document.getElementById('descripcion-marca').value
-    }
+  const marcaName = document.getElementById('nombre-marca').value;
+  const marcaDesc = document.getElementById('descripcion-marca').value;
 
-    //Creacion
-    let urlFetch = '/api/marcas';
-    let metodoHTTP = 'POST';
+  const nuevaMarca = {
+    name: marcaName,
+    description: marcaDesc
+  }
 
-    //Modo edicion
-    if(idMarcaEnEdicion !== null) {
-        urlFetch = `/api/marcas/${idMarcaEnEdicion}`;
-        metodoHTTP = 'PUT';
-    }
+  //Creacion
+  let urlFetch = '/api/marcas';
+  let metodoHTTP = 'POST';
+  let esModoEdicion = false;
+
+  //Modo edicion
+  if(idMarcaEnEdicion !== null) {
+    urlFetch = `/api/marcas/${idMarcaEnEdicion}`;
+    metodoHTTP = 'PUT';
+    esModoEdicion = true;
+  }
 
   fetch(urlFetch, {
     method: metodoHTTP,
@@ -1950,38 +2101,112 @@ document.getElementById('formulario-marca').addEventListener('submit', function(
   })
   .then(respuesta => {
     if(!respuesta.ok) throw new Error("Error en el servidor");
-    return respuesta.text();
+    return respuesta.json();
   })
-  .then(mensaje => {
+  .then(marcaGuardada => {
     var modal = bootstrap.Modal.getInstance(document.getElementById('modalMarca'));
     modal.hide();
 
     mostrarAlertaExito('Marca guardada');
-
     cancelarEdicionMarca();
-    cargarMarcas();
+
+    // Optimistic UI: Actualizar DOM sin recargar
+    const listaMarcas = document.getElementById('lista-admin-marcas');
+    const selectMarca = document.getElementById('marca-articulo');
+    const filtroMarca = document.getElementById('filtro-marca-admin');
+    
+    const marcaId = parseInt(marcaGuardada.id);
+    const marcaNameSafe = sanitizeText(marcaGuardada.name);
+    const marcaDescSafe = sanitizeText(marcaGuardada.description || '');
+
+    if (esModoEdicion) {
+      // Actualizar elemento existente
+      const marcaExistente = listaMarcas?.querySelector(`li[data-marca-id="${marcaId}"]`);
+      if (marcaExistente) {
+        const strong = marcaExistente.querySelector('strong');
+        const small = marcaExistente.querySelector('small');
+        if (strong) strong.innerText = marcaNameSafe;
+        if (small) small.innerText = marcaDescSafe;
+        
+        // Actualizar botón de editar
+        const btnEditar = marcaExistente.querySelector('.btn-outline-secondary');
+        if (btnEditar) {
+          btnEditar.setAttribute('onclick', `cargarMarcaParaEditar(${marcaId}, '${escapeQuotes(marcaNameSafe)}', '${escapeQuotes(marcaDescSafe)}')`);
+        }
+      }
+      // Actualizar selects
+      actualizarOptionEnSelect('marca-articulo', marcaId, marcaNameSafe);
+      actualizarOptionEnSelect('filtro-marca-admin', marcaId, marcaNameSafe);
+    } else {
+      // Insertar nueva marca
+      if (listaMarcas) {
+        const nuevaMarcaHTML = `
+          <li class="list-group-item d-flex justify-content-between align-items-center" data-marca-id="${marcaId}">
+            <div>
+              <strong>${marcaNameSafe}</strong> <br>
+              <small class="text-muted">${marcaDescSafe || ''}</small>
+            </div>
+            <div>
+              <button class="btn btn-sm btn-outline-secondary me-2" data-bs-toggle="modal" data-bs-target="#modalMarca" onclick="cargarMarcaParaEditar(${marcaId}, '${escapeQuotes(marcaNameSafe)}', '${escapeQuotes(marcaDescSafe)}')">✏️ Editar</button>
+              <button class="btn btn-sm btn-outline-danger" onclick="eliminarMarca(${marcaId}, this)">🗑️ Borrar</button>
+            </div>
+          </li>`;
+        listaMarcas.insertAdjacentHTML('afterbegin', nuevaMarcaHTML);
+      }
+      // Agregar a selects
+      agregarOptionASelect('marca-articulo', marcaId, marcaNameSafe);
+      agregarOptionASelect('filtro-marca-admin', marcaId, marcaNameSafe);
+    }
   })
-  .catch(error => console.error("Error al guardar:", error));
+  .catch(error => {
+    console.error("Error al guardar:", error);
+    cargarMarcas(); // Solo en caso de error
+  });
 });
+
+// Helper para actualizar option en select
+function actualizarOptionEnSelect(selectId, id, texto) {
+  const select = document.getElementById(selectId);
+  if (select) {
+    const option = select.querySelector(`option[value="${id}"]`);
+    if (option) option.text = texto;
+  }
+}
+
+// Helper para agregar option a select
+function agregarOptionASelect(selectId, id, texto) {
+  const select = document.getElementById(selectId);
+  if (select) {
+    const option = document.createElement('option');
+    option.value = id;
+    option.text = texto;
+    select.appendChild(option);
+  }
+}
 
 // -- CATEGORIAS --
 document.getElementById('formulario-categoria-articulo').addEventListener('submit', function(evento) {
-    evento.preventDefault();
+  evento.preventDefault();
 
-    const nuevaCategoria = {
-        name: document.getElementById('nombre-categoria-articulo').value,
-        description: document.getElementById('descripcion-categoria-articulo').value
-    }
+  const catName = document.getElementById('nombre-categoria-articulo').value;
+  const catDesc = document.getElementById('descripcion-categoria-articulo').value;
 
-    //Creacion
-    let urlFetch = '/api/categorias-articulos';
-    let metodoHTTP = 'POST';
+  const nuevaCategoria = {
+    name: catName,
+    description: catDesc
+  }
 
-    //Modo edicion
-    if(idCategoriaArticuloEnEdicion !== null) {
-        urlFetch = `/api/categorias-articulos/${idCategoriaArticuloEnEdicion}`;
-        metodoHTTP = 'PUT';
-    }
+  //Creacion
+  let urlFetch = '/api/categorias-articulos';
+  let metodoHTTP = 'POST';
+  let esModoEdicion = false;
+
+  //Modo edicion
+  if(idCategoriaArticuloEnEdicion !== null) {
+    urlFetch = `/api/categorias-articulos/${idCategoriaArticuloEnEdicion}`;
+    metodoHTTP = 'PUT';
+    esModoEdicion = true;
+  }
 
   fetch(urlFetch, {
     method: metodoHTTP,
@@ -1992,131 +2217,292 @@ document.getElementById('formulario-categoria-articulo').addEventListener('submi
   })
   .then(respuesta => {
     if(!respuesta.ok) throw new Error("Error en el servidor");
-    return respuesta.text();
+    return respuesta.json();
   })
-  .then(mensaje => {
+  .then(categoriaGuardada => {
     var modal = bootstrap.Modal.getInstance(document.getElementById('modalCategoriaArticulo'));
     modal.hide();
 
     mostrarAlertaExito('Categoria guardada');
-
     cancelarEdicionCategoriaArticulo();
-    cargarCategoriasArticulos();
+
+    // Optimistic UI: Actualizar DOM sin recargar
+    const listaCategorias = document.getElementById('lista-admin-categorias-articulos');
+    const selectCategoria = document.getElementById('categoria-articulo');
+    const filtroCategoria = document.getElementById('filtro-categoria-articulo-admin');
+    
+    const categoriaId = parseInt(categoriaGuardada.id);
+    const categoriaNameSafe = sanitizeText(categoriaGuardada.name);
+    const categoriaDescSafe = sanitizeText(categoriaGuardada.description || '');
+
+    if (esModoEdicion) {
+      // Actualizar elemento existente
+      const categoriaExistente = listaCategorias?.querySelector(`li[data-categoria-art-id="${categoriaId}"]`);
+      if (categoriaExistente) {
+        const strong = categoriaExistente.querySelector('strong');
+        const small = categoriaExistente.querySelector('small');
+        if (strong) strong.innerText = categoriaNameSafe;
+        if (small) small.innerText = categoriaDescSafe;
+        
+        // Actualizar botón de editar
+        const btnEditar = categoriaExistente.querySelector('.btn-outline-secondary');
+        if (btnEditar) {
+          btnEditar.setAttribute('onclick', `cargarCategoriaArticuloParaEditar(${categoriaId}, '${escapeQuotes(categoriaNameSafe)}', '${escapeQuotes(categoriaDescSafe)}')`);
+        }
+      }
+      // Actualizar selects
+      actualizarOptionEnSelect('categoria-articulo', categoriaId, categoriaNameSafe);
+      actualizarOptionEnSelect('filtro-categoria-articulo-admin', categoriaId, categoriaNameSafe);
+    } else {
+      // Insertar nueva categoría
+      if (listaCategorias) {
+        const nuevaCategoriaHTML = `
+          <li class="list-group-item d-flex justify-content-between align-items-center" data-categoria-art-id="${categoriaId}">
+            <div>
+              <strong>${categoriaNameSafe}</strong> <br>
+              <small class="text-muted">${categoriaDescSafe || ''}</small>
+            </div>
+            <div>
+              <button class="btn btn-sm btn-outline-secondary me-2" data-bs-toggle="modal" data-bs-target="#modalCategoriaArticulo" onclick="cargarCategoriaArticuloParaEditar(${categoriaId}, '${escapeQuotes(categoriaNameSafe)}', '${escapeQuotes(categoriaDescSafe)}')">✏️ Editar</button>
+              <button class="btn btn-sm btn-outline-danger" onclick="eliminarCategoriaArticulo(${categoriaId}, this)">🗑️ Borrar</button>
+            </div>
+          </li>`;
+        listaCategorias.insertAdjacentHTML('afterbegin', nuevaCategoriaHTML);
+      }
+      // Agregar a selects
+      agregarOptionASelect('categoria-articulo', categoriaId, categoriaNameSafe);
+      agregarOptionASelect('filtro-categoria-articulo-admin', categoriaId, categoriaNameSafe);
+    }
   })
-  .catch(error => console.error("Error al guardar:", error));
+  .catch(error => {
+    console.error("Error al guardar:", error);
+    cargarCategoriasArticulos(); // Solo en caso de error
+  });
 });
 
 
 // -- STOCK --
 
 document.getElementById('formulario-stock').addEventListener('submit',function(evento){
-    evento.preventDefault();
+  evento.preventDefault();
 
-    //Crear el objeto
-    const nuevoMovimiento = {
-        variantId: idVarianteEnMemoria,
-        quantity: document.getElementById('cantidad-stock').value,
-        movementType: document.getElementById('tipo-movimiento').value,
-        reason: document.getElementById('motivo').value
-    };
+  const cantidad = parseInt(document.getElementById('cantidad-stock').value);
+  const tipoMov = document.getElementById('tipo-movimiento').value;
+  
+  //Crear el objeto
+  const nuevoMovimiento = {
+    variantId: idVarianteEnMemoria,
+    quantity: cantidad,
+    movementType: tipoMov,
+    reason: document.getElementById('motivo').value
+  };
 
-    //Enviar
-    fetch('/api/stock',{
-        method: 'POST',
-        headers: {
-            'Content-Type' : 'application/json'
-        },
-        body: JSON.stringify(nuevoMovimiento)
-    })
-    .then(respuesta => {
-        if (!respuesta.ok) throw new Error("Error en el servidor.")
-        return respuesta.text();
-    })
-    .then(mensajeDelServidor => {
-        var modal = bootstrap.Modal.getInstance(document.getElementById('modalStock'));
-        modal.hide();
+  //Enviar
+  fetch('/api/stock',{
+    method: 'POST',
+    headers: {
+      'Content-Type' : 'application/json'
+    },
+    body: JSON.stringify(nuevoMovimiento)
+  })
+  .then(respuesta => {
+    if (!respuesta.ok) throw new Error("Error en el servidor.")
+    return respuesta.json();
+  })
+  .then(movimientoGuardado => {
+    var modal = bootstrap.Modal.getInstance(document.getElementById('modalStock'));
+    modal.hide();
+
+    Swal.fire('Stock guardado', '', 'success');
+    document.getElementById('formulario-stock').reset();
+
+    // Optimistic UI: Actualizar badge de stock en el DOM sin recargar
+    if (idVarianteEnMemoria) {
+      const stockBadge = document.getElementById(`stock-badge-${idVarianteEnMemoria}`);
+      if (stockBadge && movimientoGuardado && movimientoGuardado.newStock !== undefined) {
+        const nuevoStock = parseInt(movimientoGuardado.newStock);
+        stockBadge.innerText = nuevoStock;
+        stockBadge.className = `badge ${nuevoStock > 0 ? 'bg-success' : 'bg-danger'}`;
         
-        Swal.fire('Stock guardado', '', 'success');
-
-        document.getElementById('formulario-stock').reset();
-
-        cargarArticulos();
-    })
-    .catch(error => console.error("Error al guardar:", error));
+        // Actualizar también los inputs de cantidad máxima en punto de venta
+        const inputCant = document.getElementById(`cant-${idVarianteEnMemoria}`);
+        if (inputCant) {
+          inputCant.max = nuevoStock;
+          if (parseInt(inputCant.value) > nuevoStock) {
+            inputCant.value = nuevoStock;
+          }
+        }
+      }
+    }
+  })
+  .catch(error => {
+    console.error("Error al guardar:", error);
+    cargarArticulos(); // Solo en caso de error
+  });
 });
 
 // -- GASTOS GENERALES --
 
 document.getElementById('formulario-gastos').addEventListener('submit', function(evento){
-    evento.preventDefault();
+  evento.preventDefault();
 
-    let fechaJava = document.getElementById('fecha-gasto').value + "T00:00:00";
-    let idCat = document.getElementById('categoria-gasto').value;
+  const fechaInput = document.getElementById('fecha-gasto').value;
+  let fechaJava = fechaInput + "T00:00:00";
+  let idCat = document.getElementById('categoria-gasto').value;
+  const monto = document.getElementById('monto-gasto').value;
+  const descripcion = document.getElementById('descripcion-gasto').value;
 
-    const nuevoGasto = {
-        category: {id: idCat}, 
-        amount: document.getElementById('monto-gasto').value,
-        description: document.getElementById('descripcion-gasto').value,
-        date: fechaJava
-    };
+  const nuevoGasto = {
+    category: {id: idCat},
+    amount: monto,
+    description: descripcion,
+    date: fechaJava
+  };
 
-    let urlFetch = `/api/expensas`;
-    let metodoHTTP = 'POST';
+  let urlFetch = `/api/expensas`;
+  let metodoHTTP = 'POST';
+  let esModoEdicion = false;
 
-    if(idGastoEnEdicion !== null){
-        urlFetch = `/api/expensas/${idGastoEnEdicion}`;
-        metodoHTTP = 'PUT';
-    }
+  if(idGastoEnEdicion !== null){
+    urlFetch = `/api/expensas/${idGastoEnEdicion}`;
+    metodoHTTP = 'PUT';
+    esModoEdicion = true;
+  }
 
-    fetch(urlFetch, {
-        method: metodoHTTP,
-        headers: { 'Content-Type' : 'application/json' },
-        body: JSON.stringify(nuevoGasto)
-    })
-    .then(respuesta => {
-        if(!respuesta.ok) throw new Error("Error al guardar.");
-        return respuesta.text();
-    })
-    .then(mensaje => {
-        var modal = bootstrap.Modal.getInstance(document.getElementById('modalGasto'));
-        modal.hide();
-        
+  fetch(urlFetch, {
+    method: metodoHTTP,
+    headers: { 'Content-Type' : 'application/json' },
+    body: JSON.stringify(nuevoGasto)
+  })
+  .then(respuesta => {
+    if(!respuesta.ok) throw new Error("Error al guardar.");
+    return respuesta.json();
+  })
+  .then(gastoGuardado => {
+    var modal = bootstrap.Modal.getInstance(document.getElementById('modalGasto'));
+    modal.hide();
+
     Swal.fire('Guardada', '', 'success');
-    cargarUltimosGastos();
-        cancelarEdicionGasto();
-    })
-    .catch(error => console.error("Error:",error));
+    cancelarEdicionGasto();
+
+    // Optimistic UI: Actualizar tabla sin recargar
+    const tbody = document.getElementById('tbody-ultimos-gastos');
+    if (tbody) {
+      const gastoId = parseInt(gastoGuardado.id);
+      const fecha = new Date(gastoGuardado.date).toLocaleDateString('es-AR');
+      const categoriaName = gastoGuardado.category?.name || '-';
+      const desc = gastoGuardado.description || '-';
+      const amount = parseFloat(gastoGuardado.amount).toFixed(2);
+
+      if (esModoEdicion) {
+        // Actualizar fila existente
+        const filaExistente = tbody.querySelector(`tr#gasto-row-${gastoId}`);
+        if (filaExistente) {
+          filaExistente.innerHTML = `
+            <td>${fecha}</td>
+            <td><span class="badge bg-secondary">${categoriaName}</span></td>
+            <td>${desc}</td>
+            <td class="text-danger fw-bold">$${amount}</td>
+            <td>
+              <button class="btn btn-sm btn-outline-secondary me-1" onclick="cargarGastoParaEditar(${gastoId},${gastoGuardado.category?.id || 0},${amount},'${desc}', '${gastoGuardado.date}')" data-bs-toggle="modal" data-bs-target="#modalGasto">Editar</button>
+              <button class="btn btn-sm btn-outline-danger" onclick="eliminarGasto(${gastoId}, this)">Eliminar</button>
+            </td>
+          `;
+        }
+      } else {
+        // Insertar nueva fila al principio
+        const nuevaFilaHTML = `<tr id="gasto-row-${gastoId}">
+          <td>${fecha}</td>
+          <td><span class="badge bg-secondary">${categoriaName}</span></td>
+          <td>${desc}</td>
+          <td class="text-danger fw-bold">$${amount}</td>
+          <td>
+            <button class="btn btn-sm btn-outline-secondary me-1" onclick="cargarGastoParaEditar(${gastoId},${gastoGuardado.category?.id || 0},${amount},'${desc}', '${gastoGuardado.date}')" data-bs-toggle="modal" data-bs-target="#modalGasto">Editar</button>
+            <button class="btn btn-sm btn-outline-danger" onclick="eliminarGasto(${gastoId}, this)">Eliminar</button>
+          </td>
+        </tr>`;
+        tbody.insertAdjacentHTML('afterbegin', nuevaFilaHTML);
+      }
+    }
+  })
+  .catch(error => {
+    console.error("Error:",error);
+    cargarUltimosGastos(); // Solo en caso de error
+  });
 });
 
 document.getElementById('formulario-nueva-categoria').addEventListener('submit', function(evento){
-    evento.preventDefault();
+  evento.preventDefault();
 
-    let nombre = document.getElementById('nombre-nueva-categoria').value;
-    const nuevaCategoria = { name: nombre };
+  let nombre = document.getElementById('nombre-nueva-categoria').value;
+  const nuevaCategoria = { name: nombre };
 
-    let urlFetch = '/api/categorias';
-    let metodoHTTP = 'POST';
+  let urlFetch = '/api/categorias';
+  let metodoHTTP = 'POST';
+  let esModoEdicion = false;
 
-    if (idCategoriaGastoEnEdicion !== null) {
-        urlFetch = `/api/categorias/${idCategoriaGastoEnEdicion}`;
-        metodoHTTP = 'PUT';
-    }
+  if (idCategoriaGastoEnEdicion !== null) {
+    urlFetch = `/api/categorias/${idCategoriaGastoEnEdicion}`;
+    metodoHTTP = 'PUT';
+    esModoEdicion = true;
+  }
 
-    fetch(urlFetch, {
-        method: metodoHTTP,
-        headers: { 'Content-Type' : 'application/json' },
-        body: JSON.stringify(nuevaCategoria)
-    })
-    .then(respuesta => {
-        if(!respuesta.ok) throw new Error("Error al guardar la categoria.");
-        return respuesta.text();
-    })
-    .then(mensaje => {
+  fetch(urlFetch, {
+    method: metodoHTTP,
+    headers: { 'Content-Type' : 'application/json' },
+    body: JSON.stringify(nuevaCategoria)
+  })
+  .then(respuesta => {
+    if(!respuesta.ok) throw new Error("Error al guardar la categoria.");
+    return respuesta.json();
+  })
+  .then(categoriaGuardada => {
     Swal.fire('Guardada', '', 'success');
     cancelarEdicionCategoriaGasto();
-        cargarCategoriasGastos();
-    })
-    .catch(error => console.error("Error:",error));
+
+    // Optimistic UI: Actualizar DOM sin recargar
+    const listaCategorias = document.getElementById('lista-categorias-gastos');
+    const selectCategoria = document.getElementById('categoria-gasto');
+    
+    const categoriaId = parseInt(categoriaGuardada.id);
+    const categoriaNameSafe = sanitizeText(categoriaGuardada.name);
+
+    if (esModoEdicion) {
+      // Actualizar elemento existente
+      const categoriaExistente = listaCategorias?.querySelector(`li[data-categoria-gasto-id="${categoriaId}"]`);
+      if (categoriaExistente) {
+        const span = categoriaExistente.querySelector('span');
+        if (span) span.innerText = categoriaNameSafe;
+        
+        // Actualizar botón de editar
+        const btnEditar = categoriaExistente.querySelector('.btn-outline-secondary');
+        if (btnEditar) {
+          btnEditar.setAttribute('onclick', `cargarCategoriaGastoParaEditar(${categoriaId}, '${escapeQuotes(categoriaNameSafe)}')`);
+        }
+      }
+      // Actualizar select
+      actualizarOptionEnSelect('categoria-gasto', categoriaId, categoriaNameSafe);
+    } else {
+      // Insertar nueva categoría
+      if (listaCategorias) {
+        const nuevaCategoriaHTML = `
+          <li class="list-group-item d-flex justify-content-between align-items-center" data-categoria-gasto-id="${categoriaId}">
+            <span>${categoriaNameSafe}</span>
+            <div>
+              <button class="btn btn-sm btn-outline-secondary me-1" onclick="cargarCategoriaGastoParaEditar(${categoriaId}, '${escapeQuotes(categoriaNameSafe)}')">Editar</button>
+              <button class="btn btn-sm btn-outline-danger" onclick="eliminarCategoriaGasto(${categoriaId}, this)">Eliminar</button>
+            </div>
+          </li>`;
+        listaCategorias.insertAdjacentHTML('afterbegin', nuevaCategoriaHTML);
+      }
+      // Agregar a select
+      agregarOptionASelect('categoria-gasto', categoriaId, categoriaNameSafe);
+    }
+  })
+  .catch(error => {
+    console.error("Error:",error);
+    cargarCategoriasGastos(); // Solo en caso de error
+  });
 });
 
 // -- VENTA --

@@ -784,6 +784,51 @@
   </div>
 </div>
 
+<!-- Modal para Ver Historial de Pagos -->
+<div class="modal fade" id="modalHistorialPagos" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-info text-white">
+        <h5 class="modal-title">👁️ Historial de Pagos</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <h6 class="fw-bold">Proveedor: <span id="historial-proveedor" class="text-primary"></span></h6>
+          <h6 class="fw-bold">N° Factura: <span id="historial-factura" class="text-muted"></span></h6>
+          <h6 class="fw-bold">Total Factura: <span id="historial-total" class="text-dark"></span></h6>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-striped">
+            <thead class="table-dark">
+              <tr>
+                <th>#</th>
+                <th>Fecha</th>
+                <th>Método</th>
+                <th class="text-end">Monto</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-historial-pagos">
+            </tbody>
+            <tfoot class="table-group-divider">
+              <tr class="table-success">
+                <td colspan="3" class="text-end fw-bold">Total Pagado:</td>
+                <td id="historial-total-pagado" class="text-end fw-bold text-success"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div id="mensaje-sin-pagos" class="text-center text-muted" style="display: none;">
+          <p>No hay pagos registrados para esta factura.</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Modal para Registrar Pago de Compra -->
 <div class="modal fade" id="modalRegistrarPago" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down">
