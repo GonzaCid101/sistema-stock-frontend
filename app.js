@@ -182,162 +182,225 @@ function decodificarToken(token) {
 
 // -- INICIALIZACION --
 
-function cargarArticulos() {
-  //Busca el token guardado
+// Cache global para artículos (evita re-fetch innecesarios)
+let cacheArticulos = null;
+let lastFetchArticulos = 0;
+const CACHE_DURATION = 60000; // 1 minuto de cache
 
-  fetch('/api/articulos', {
-    method: 'GET',
-  })
-  .then(respuesta => respuesta.json())
-  .then(datos => {
-    // Listas de la pantalla
-    const listaVentas = document.getElementById('catalogo-ventas');
-    const listaCompras = document.getElementById('catalogo-compras');
-    const listaAdmin = document.getElementById('catalogo-admin');
+function cargarArticulos(forzarRecarga = false) {
+  // Verificar cache válido
+  const ahora = Date.now();
+  if (!forzarRecarga && cacheArticulos && (ahora - lastFetchArticulos) < CACHE_DURATION) {
+    renderizarArticulos(cacheArticulos);
+    return;
+  }
 
-    listaVentas.innerHTML = '';
-    listaCompras.innerHTML = '';
-    listaAdmin.innerHTML = '';
+  // Mostrar loader solo si no hay datos cacheados
+  const listaAdmin = document.getElementById('catalogo-admin');
+  const listaVentas = document.getElementById('catalogo-ventas');
+  const listaCompras = document.getElementById('catalogo-compras');
+  
+  if (!cacheArticulos) {
+    if (listaAdmin) listaAdmin.innerHTML = '<li class="text-center text-muted">Cargando...</li>';
+  }
 
-    // Usar DocumentFragment para mejor rendimiento
-    const fragmentVentas = document.createDocumentFragment();
-    const fragmentCompras = document.createDocumentFragment();
-    const fragmentAdmin = document.createDocumentFragment();
+  fetch('/api/articulos', { method: 'GET' })
+    .then(respuesta => respuesta.json())
+    .then(datos => {
+      // Guardar en cache
+      cacheArticulos = datos;
+      lastFetchArticulos = ahora;
+      
+      renderizarArticulos(datos);
+    })
+    .catch(error => {
+      console.error("Error cargando artículos:", error);
+      mostrarAlertaError('Error', 'No se pudieron cargar los artículos');
+    });
+}
 
-    datos.forEach(articulo => {
+// Función separada para renderizar (puede llamarse desde cache)
+function renderizarArticulos(datos) {
+  const listaVentas = document.getElementById('catalogo-ventas');
+  const listaCompras = document.getElementById('catalogo-compras');
+  const listaAdmin = document.getElementById('catalogo-admin');
+
+  if (listaVentas) listaVentas.innerHTML = '';
+  if (listaCompras) listaCompras.innerHTML = '';
+  if (listaAdmin) listaAdmin.innerHTML = '';
+
+  // Usar DocumentFragment para mejor rendimiento
+  const fragmentVentas = document.createDocumentFragment();
+  const fragmentCompras = document.createDocumentFragment();
+  const fragmentAdmin = document.createDocumentFragment();
+
+  // Limitar procesamiento por lotes para no bloquear el UI thread
+  const BATCH_SIZE = 50;
+  let index = 0;
+
+  function procesarLote() {
+    const fin = Math.min(index + BATCH_SIZE, datos.length);
+    
+    for (let i = index; i < fin; i++) {
+      const articulo = datos[i];
       // Sanitizar datos del artículo
       const articuloName = sanitizeText(articulo.name);
-      const articuloBrand = sanitizeText(articulo.brand.name);
-      const articuloDescription = sanitizeText(articulo.description);
+      const articuloBrand = sanitizeText(articulo.brand?.name || '');
+      const articuloDescription = sanitizeText(articulo.description || '');
       const articuloId = parseInt(articulo.id);
-      const brandId = parseInt(articulo.brand.id);
-      const categoryId = parseInt(articulo.category.id);
-      const categoryName = sanitizeText(articulo.category.name);
+      const brandId = parseInt(articulo.brand?.id || 0);
+      const categoryId = parseInt(articulo.category?.id || 0);
+      const categoryName = sanitizeText(articulo.category?.name || '');
 
-      // -- PUNTO DE VENTA --
-      const liVenta = document.createElement('li');
-      liVenta.className = 'item-articulo';
+      // Solo generar HTML si los elementos existen
+      if (listaVentas) {
+        fragmentVentas.appendChild(crearElementoVenta(articulo, articuloName, articuloBrand, articuloDescription, articuloId, brandId, categoryId, categoryName));
+      }
+      
+      if (listaCompras) {
+        fragmentCompras.appendChild(crearElementoCompra(articulo, articuloName, articuloBrand, articuloDescription, articuloId, brandId, categoryId, categoryName));
+      }
+      
+      if (listaAdmin) {
+        fragmentAdmin.appendChild(crearElementoAdmin(articulo, articuloName, articuloBrand, articuloDescription, articuloId, brandId, categoryId, categoryName));
+      }
+    }
 
-      let htmlVentaItem = `
-        <details>
-          <summary style="cursor: pointer; font-size: 1.1em; padding: 5px; background-color: #f1f1f1;">
-            <strong>${articuloName}</strong> - ${articuloBrand}
-          </summary>
-          <p style="margin: 5px 10px; font-style: italic; color: #666; font-size: 0.9em;">${articuloDescription}</p>
-          <ul style="margin-top: 10px;">`;
+    index = fin;
 
-      articulo.variants.forEach(variante => {
-        const varianteSize = sanitizeText(variante.size);
-        const varianteColor = sanitizeText(variante.color);
-        const variantePrice = parseFloat(variante.price);
-        const varianteStock = parseInt(variante.stock);
-        const varianteId = parseInt(variante.id);
+    if (index < datos.length) {
+      // Procesar siguiente lote en el siguiente frame
+      requestAnimationFrame(procesarLote);
+    } else {
+      // Todos los lotes procesados, agregar al DOM
+      if (listaVentas) listaVentas.appendChild(fragmentVentas);
+      if (listaCompras) listaCompras.appendChild(fragmentCompras);
+      if (listaAdmin) listaAdmin.appendChild(fragmentAdmin);
+    }
+  }
 
-        let controlesVenta = '';
-        if (varianteStock > 0) {
-          controlesVenta = `
-            <input type="number" id="cant-${varianteId}" value="1" min="1" max="${varianteStock}" style="width: 50px;">
-            <button onclick="agregarAlCarrito(${varianteId},'${escapeQuotes(articuloName)}','${escapeQuotes(articuloBrand)}','${escapeQuotes(varianteSize)}','${escapeQuotes(varianteColor)}',${variantePrice}, document.getElementById('cant-${varianteId}').value)">Agregar</button>`;
-        } else {
-          controlesVenta = `<span style="color: red; font-weight: bold;">AGOTADO</span>`;
-        }
-        htmlVentaItem += `<li>Talle: ${varianteSize} | Color: ${varianteColor} | Precio: ${variantePrice} | Stock: ${varianteStock}
-        <br>
-        ${controlesVenta}
-        </li>`;
-      });
-      htmlVentaItem += `</ul></details><hr>`;
-      liVenta.innerHTML = htmlVentaItem;
-      fragmentVentas.appendChild(liVenta);
+  procesarLote();
+}
 
-      // -- INGRESO DE COMPRAS --
-      const liCompra = document.createElement('li');
-      liCompra.className = 'item-articulo';
+// Funciones helper para crear elementos (reduce complejidad ciclomática)
+function crearElementoVenta(articulo, articuloName, articuloBrand, articuloDescription, articuloId, brandId, categoryId, categoryName) {
+  const li = document.createElement('li');
+  li.className = 'item-articulo';
+  li.setAttribute('data-articulo-id', articuloId);
 
-      let htmlCompraItem = `
-        <details>
-          <summary style="cursor: pointer; font-size: 1.1em; padding: 5px; background-color: #f1f1f1;">
-            <strong>${articuloName}</strong> - ${articuloBrand}
-          </summary>
-          <p style="margin: 5px 10px; font-style: italic; color: #666; font-size: 0.9em;">${articuloDescription}</p>
-          <ul style="margin-top: 10px;">`;
+  let html = `
+    <details>
+      <summary style="cursor: pointer; font-size: 1.1em; padding: 5px; background-color: #f1f1f1;">
+        <strong>${articuloName}</strong> - ${articuloBrand}
+      </summary>
+      <p style="margin: 5px 10px; font-style: italic; color: #666; font-size: 0.9em;">${articuloDescription}</p>
+      <ul style="margin-top: 10px;">`;
 
-      articulo.variants.forEach(variante => {
-        const varianteSize = sanitizeText(variante.size);
-        const varianteColor = sanitizeText(variante.color);
-        const variantePrice = parseFloat(variante.price);
-        const varianteStock = parseInt(variante.stock);
-        const varianteId = parseInt(variante.id);
+  if (articulo.variants) {
+    articulo.variants.forEach(variante => {
+      const vSize = sanitizeText(variante.size);
+      const vColor = sanitizeText(variante.color);
+      const vPrice = parseFloat(variante.price);
+      const vStock = parseInt(variante.stock);
+      const vId = parseInt(variante.id);
 
-        let controlesCompra = '';
-        if (varianteStock <= 0) {
-          controlesCompra = `<span style="color: red; font-weight: bold;">AGOTADO</span>`;
-        }
-        controlesCompra += `
-          Cant: <input type="number" id="cant-${varianteId}" value="1" min="1" style="width: 50px;">
-          Precio Costo: $<input type="number" id="precio-${varianteId}" value="0" min="0" step="0.01" placeholder="0.00">
-          <button onclick="agregarAlIngreso(${varianteId},'${escapeQuotes(articuloName)}','${escapeQuotes(articuloBrand)}','${escapeQuotes(varianteSize)}','${escapeQuotes(varianteColor)}',document.getElementById('precio-${varianteId}').value, document.getElementById('cant-${varianteId}').value)">Agregar</button>`;
-        htmlCompraItem += `<li>Talle: ${varianteSize} | Color: ${varianteColor} | Precio Venta: ${variantePrice} | Stock: ${varianteStock}
-        <br>
-        ${controlesCompra}
-        </li>`;
-      });
-      htmlCompraItem += `</ul></details><hr>`;
-      liCompra.innerHTML = htmlCompraItem;
-      fragmentCompras.appendChild(liCompra);
+      let controles = vStock > 0 
+        ? `<input type="number" id="cant-${vId}" value="1" min="1" max="${vStock}" style="width: 50px;">
+           <button onclick="agregarAlCarrito(${vId},'${escapeQuotes(articuloName)}','${escapeQuotes(articuloBrand)}','${escapeQuotes(vSize)}','${escapeQuotes(vColor)}',${vPrice}, document.getElementById('cant-${vId}').value)">Agregar</button>`
+        : `<span style="color: red; font-weight: bold;">AGOTADO</span>`;
 
-      // -- ADMINISTRACIÓN --
-      const liAdmin = document.createElement('li');
-      liAdmin.className = 'list-group-item mb-3 shadow-sm rounded';
-      liAdmin.setAttribute('data-marca', brandId);
-      liAdmin.setAttribute('data-categoria', categoryId);
-
-      let htmlAdminItem = `
-        <div class="d-flex justify-content-between align-items-center p-2 mb-2">
-          <div>
-            <strong style="font-size: 1.1em;">${articuloName}</strong>
-            <span class="badge bg-secondary ms-2">${articuloBrand}</span>
-            <span class="badge bg-info text-dark ms-1">${categoryName}</span>
-            <p class="mb-0 text-muted small">${articuloDescription}</p>
-          </div>
-          <div>
-            <button class="btn btn-sm btn-outline-primary" onclick="prepararVariante('${escapeQuotes(articuloName)}',${articuloId})" data-bs-toggle="modal" data-bs-target="#modalVariante">+ Agregar Talle</button>
-            <button class="btn btn-sm btn-outline-secondary mx-1" onclick="cargarArticuloParaEditar(${articuloId}, '${escapeQuotes(articuloName)}', ${brandId},${categoryId}, '${escapeQuotes(articuloDescription)}')" data-bs-toggle="modal" data-bs-target="#modalArticulo">✏️ Editar</button>
-            <button class="btn btn-sm btn-outline-danger" onclick="eliminarArticulo(${articuloId})">🗑️ Borrar</button>
-          </div>
-        </div>
-        <ul class="list-group list-group-flush border-top pt-2">`;
-
-      articulo.variants.forEach(variante => {
-        const varianteSize = sanitizeText(variante.size);
-        const varianteColor = sanitizeText(variante.color);
-        const variantePrice = parseFloat(variante.price);
-        const varianteStock = parseInt(variante.stock);
-        const varianteId = parseInt(variante.id);
-
-      htmlAdminItem += `<li class="list-group-item d-flex justify-content-between align-items-center bg-light" data-variante-id="${varianteId}">
-            <span>Talle: <strong>${varianteSize}</strong> | Color: <strong>${varianteColor}</strong> | Precio: ${variantePrice} | Stock: <span id="stock-badge-${varianteId}" class="badge ${varianteStock > 0 ? 'bg-success' : 'bg-danger'}">${varianteStock}</span></span>
-            <div>
-              <button class="btn btn-sm btn-warning me-1" onclick="prepararStock(${varianteId},'${escapeQuotes(articuloName)}','${escapeQuotes(varianteSize)}')" data-bs-toggle="modal" data-bs-target="#modalStock">📦 Stock</button>
-              <button class="btn btn-sm btn-outline-secondary me-1" onclick="cargarVarianteParaEditar(${articuloId},${varianteId}, '${escapeQuotes(varianteSize)}', '${escapeQuotes(varianteColor)}', ${variantePrice}, '${escapeQuotes(variante.barCode)}')" data-bs-toggle="modal" data-bs-target="#modalVariante">✏️</button>
-              <button class="btn btn-sm btn-outline-danger" onclick="eliminarVariante(${articuloId}, ${varianteId}, this)">🗑️</button>
-            </div>
-          </li>`;
-      });
-      htmlAdminItem += `</ul>`;
-      liAdmin.innerHTML = htmlAdminItem;
-      fragmentAdmin.appendChild(liAdmin);
+      html += `<li data-variante-id="${vId}">Talle: ${vSize} | Color: ${vColor} | Precio: ${vPrice} | Stock: ${vStock}
+        <br>${controles}</li>`;
     });
+  }
+  
+  html += `</ul></details><hr>`;
+  li.innerHTML = html;
+  return li;
+}
 
-    // Agregar fragments al DOM (una sola operación de reflow)
-    listaVentas.appendChild(fragmentVentas);
-    listaCompras.appendChild(fragmentCompras);
-    listaAdmin.appendChild(fragmentAdmin);
-  })
-.catch(error => {
-  console.error("Houston, tenemos un problema:", error);
-  mostrarAlertaError('Error', 'No se pudieron cargar los artículos');
-});
+function crearElementoCompra(articulo, articuloName, articuloBrand, articuloDescription, articuloId, brandId, categoryId, categoryName) {
+  const li = document.createElement('li');
+  li.className = 'item-articulo';
+  li.setAttribute('data-articulo-id', articuloId);
+
+  let html = `
+    <details>
+      <summary style="cursor: pointer; font-size: 1.1em; padding: 5px; background-color: #f1f1f1;">
+        <strong>${articuloName}</strong> - ${articuloBrand}
+      </summary>
+      <p style="margin: 5px 10px; font-style: italic; color: #666; font-size: 0.9em;">${articuloDescription}</p>
+      <ul style="margin-top: 10px;">`;
+
+  if (articulo.variants) {
+    articulo.variants.forEach(variante => {
+      const vSize = sanitizeText(variante.size);
+      const vColor = sanitizeText(variante.color);
+      const vPrice = parseFloat(variante.price);
+      const vStock = parseInt(variante.stock);
+      const vId = parseInt(variante.id);
+
+      let agotado = vStock <= 0 ? `<span style="color: red; font-weight: bold;">AGOTADO</span>` : '';
+      let controles = `${agotado}
+        Cant: <input type="number" id="cant-${vId}" value="1" min="1" style="width: 50px;">
+        Precio Costo: $<input type="number" id="precio-${vId}" value="0" min="0" step="0.01" placeholder="0.00">
+        <button onclick="agregarAlIngreso(${vId},'${escapeQuotes(articuloName)}','${escapeQuotes(articuloBrand)}','${escapeQuotes(vSize)}','${escapeQuotes(vColor)}',document.getElementById('precio-${vId}').value, document.getElementById('cant-${vId}').value)">Agregar</button>`;
+
+      html += `<li data-variante-id="${vId}">Talle: ${vSize} | Color: ${vColor} | Precio Venta: ${vPrice} | Stock: ${vStock}
+        <br>${controles}</li>`;
+    });
+  }
+  
+  html += `</ul></details><hr>`;
+  li.innerHTML = html;
+  return li;
+}
+
+function crearElementoAdmin(articulo, articuloName, articuloBrand, articuloDescription, articuloId, brandId, categoryId, categoryName) {
+  const li = document.createElement('li');
+  li.className = 'list-group-item mb-3 shadow-sm rounded';
+  li.setAttribute('data-articulo-id', articuloId);
+  li.setAttribute('data-marca', brandId);
+  li.setAttribute('data-categoria', categoryId);
+
+  let html = `
+    <div class="d-flex justify-content-between align-items-center p-2 mb-2">
+      <div>
+        <strong style="font-size: 1.1em;">${articuloName}</strong>
+        <span class="badge bg-secondary ms-2">${articuloBrand}</span>
+        <span class="badge bg-info text-dark ms-1">${categoryName}</span>
+        <p class="mb-0 text-muted small">${articuloDescription}</p>
+      </div>
+      <div>
+        <button class="btn btn-sm btn-outline-primary" onclick="prepararVariante('${escapeQuotes(articuloName)}',${articuloId})" data-bs-toggle="modal" data-bs-target="#modalVariante">+ Agregar Talle</button>
+        <button class="btn btn-sm btn-outline-secondary mx-1" onclick="cargarArticuloParaEditar(${articuloId}, '${escapeQuotes(articuloName)}', ${brandId},${categoryId}, '${escapeQuotes(articuloDescription)}')" data-bs-toggle="modal" data-bs-target="#modalArticulo">✏️ Editar</button>
+        <button class="btn btn-sm btn-outline-danger" onclick="eliminarArticulo(${articuloId})">🗑️ Borrar</button>
+      </div>
+    </div>
+    <ul class="list-group list-group-flush border-top pt-2">`;
+
+  if (articulo.variants) {
+    articulo.variants.forEach(variante => {
+      const vSize = sanitizeText(variante.size);
+      const vColor = sanitizeText(variante.color);
+      const vPrice = parseFloat(variante.price);
+      const vStock = parseInt(variante.stock);
+      const vId = parseInt(variante.id);
+
+      html += `<li class="list-group-item d-flex justify-content-between align-items-center bg-light" data-variante-id="${vId}">
+          <span>Talle: <strong>${vSize}</strong> | Color: <strong>${vColor}</strong> | Precio: ${vPrice} | Stock: <span id="stock-badge-${vId}" class="badge ${vStock > 0 ? 'bg-success' : 'bg-danger'}">${vStock}</span></span>
+          <div>
+            <button class="btn btn-sm btn-warning me-1" onclick="prepararStock(${vId},'${escapeQuotes(articuloName)}','${escapeQuotes(vSize)}')" data-bs-toggle="modal" data-bs-target="#modalStock">📦 Stock</button>
+            <button class="btn btn-sm btn-outline-secondary me-1" onclick="cargarVarianteParaEditar(${articuloId},${vId}, '${escapeQuotes(vSize)}', '${escapeQuotes(vColor)}', ${vPrice}, '${escapeQuotes(variante.barCode || '')}')" data-bs-toggle="modal" data-bs-target="#modalVariante">✏️</button>
+            <button class="btn btn-sm btn-outline-danger" onclick="eliminarVariante(${articuloId}, ${vId}, this)">🗑️</button>
+          </div>
+        </li>`;
+    });
+  }
+  
+  html += `</ul>`;
+  li.innerHTML = html;
+  return li;
 }
 
 function filtrarCatalogo(idInput, idLista){
@@ -842,19 +905,20 @@ function cargarMarcas() {
       if(selectMarca) selectMarca.appendChild(opcion);
       if(filtroMarca) filtroMarca.appendChild(opcion.cloneNode(true));
 
-      let li = document.createElement('li');
-      li.className = "list-group-item d-flex justify-content-between align-items-center";
-      li.innerHTML = `
-        <div>
-          <strong>${marcaName}</strong> <br>
-          <small class="text-muted">${marcaDesc || ''}</small>
-        </div>
-        <div>
-          <button class="btn btn-sm btn-outline-secondary me-2" data-bs-toggle="modal" data-bs-target="#modalMarca" onclick="cargarMarcaParaEditar(${marcaId}, '${escapeQuotes(marcaName)}', '${escapeQuotes(marcaDesc)}')">✏️ Editar</button>
-          <button class="btn btn-sm btn-outline-danger" onclick="eliminarMarca(${marcaId})">🗑️ Borrar</button>
-        </div>
-      `;
-      fragment.appendChild(li);
+    let li = document.createElement('li');
+        li.className = "list-group-item d-flex justify-content-between align-items-center";
+        li.setAttribute('data-marca-id', marcaId);
+        li.innerHTML = `
+          <div>
+            <strong>${marcaName}</strong> <br>
+            <small class="text-muted">${marcaDesc || ''}</small>
+          </div>
+          <div>
+            <button class="btn btn-sm btn-outline-secondary me-2" data-bs-toggle="modal" data-bs-target="#modalMarca" onclick="cargarMarcaParaEditar(${marcaId}, '${escapeQuotes(marcaName)}', '${escapeQuotes(marcaDesc)}')">✏️ Editar</button>
+            <button class="btn btn-sm btn-outline-danger" onclick="eliminarMarca(${marcaId}, this)">🗑️ Borrar</button>
+          </div>
+        `;
+        fragment.appendChild(li);
     });
 
     if(listaMarcas) listaMarcas.appendChild(fragment);
@@ -865,7 +929,7 @@ function cargarMarcas() {
 });
 }
 
-function eliminarMarca(idMarca){
+function eliminarMarca(idMarca, botonElement){
   Swal.fire({
     title: '¿Borrar Marca?',
     text: "Verificá que no tenga artículos asociados",
@@ -875,14 +939,44 @@ function eliminarMarca(idMarca){
     confirmButtonText: 'Sí, borrar'
   }).then((result) => {
     if (result.isConfirmed) {
+      const elementoLista = botonElement.closest('li[data-marca-id]');
+      
       fetch(`/api/marcas/${idMarca}`,{ method: 'DELETE' })
-      .then(res => res.text())
-      .then(msg => {
-        mostrarAlertaExito('¡Borrada!');
-        cargarMarcas();
-      });
+        .then(res => {
+          if (!res.ok) throw new Error('Error al eliminar la marca');
+          return res.text();
+        })
+        .then(() => {
+          if (elementoLista) {
+            elementoLista.remove();
+          }
+          mostrarAlertaExito('¡Marca eliminada!');
+          
+          // Actualizar selects sin recargar todo
+          actualizarSelectsMarcas();
+        })
+        .catch(error => {
+          mostrarAlertaError('Error', error.message);
+          cargarMarcas();
+        });
     }
   });
+}
+
+// Función auxiliar para actualizar solo los selects de marcas sin recargar todo
+function actualizarSelectsMarcas() {
+  const selectMarca = document.getElementById('marca-articulo');
+  const filtroMarca = document.getElementById('filtro-marca-admin');
+  
+  // Si estamos en la pantalla de administración, recargar solo la lista
+  const listaMarcas = document.getElementById('lista-admin-marcas');
+  if (listaMarcas) {
+    // Ya se eliminó visualmente, no necesitamos recargar
+    return;
+  }
+  
+  // Si estamos en otra pantalla, recargar marcas completamente
+  cargarMarcas();
 }
 
 // -- CATEGORIAS ARTICULOS --
@@ -931,18 +1025,19 @@ function cargarCategoriasArticulos() {
       selectCategoria.appendChild(opcion);
       filtroCategoria.appendChild(opcion.cloneNode(true));
 
-      let li = document.createElement('li');
-      li.className = "list-group-item d-flex justify-content-between align-items-center";
-      li.innerHTML = `
-        <div>
-          <strong>${categoriaName}</strong> <br>
-          <small class="text-muted">${categoriaDesc || ''}</small>
-        </div>
-        <div>
-          <button class="btn btn-sm btn-outline-secondary me-2" data-bs-toggle="modal" data-bs-target="#modalCategoriaArticulo" onclick="cargarCategoriaArticuloParaEditar(${categoriaId}, '${escapeQuotes(categoriaName)}', '${escapeQuotes(categoriaDesc)}')">✏️ Editar</button>
-          <button class="btn btn-sm btn-outline-danger" onclick="eliminarCategoriaArticulo(${categoriaId})">🗑️ Borrar</button>
-        </div>
-      `;
+    let li = document.createElement('li');
+        li.className = "list-group-item d-flex justify-content-between align-items-center";
+        li.setAttribute('data-categoria-art-id', categoriaId);
+        li.innerHTML = `
+          <div>
+            <strong>${categoriaName}</strong> <br>
+            <small class="text-muted">${categoriaDesc || ''}</small>
+          </div>
+          <div>
+            <button class="btn btn-sm btn-outline-secondary me-2" data-bs-toggle="modal" data-bs-target="#modalCategoriaArticulo" onclick="cargarCategoriaArticuloParaEditar(${categoriaId}, '${escapeQuotes(categoriaName)}', '${escapeQuotes(categoriaDesc)}')">✏️ Editar</button>
+            <button class="btn btn-sm btn-outline-danger" onclick="eliminarCategoriaArticulo(${categoriaId}, this)">🗑️ Borrar</button>
+          </div>
+        `;
       fragment.appendChild(li);
     });
 
@@ -955,7 +1050,7 @@ function cargarCategoriasArticulos() {
 }
 
 
-function eliminarCategoriaArticulo(idCategoria){
+function eliminarCategoriaArticulo(idCategoria, botonElement){
   Swal.fire({
     title: '¿Borrar Categoría?',
     text: "Verificá que no tenga artículos asociados",
@@ -965,12 +1060,23 @@ function eliminarCategoriaArticulo(idCategoria){
     confirmButtonText: 'Sí, borrar'
   }).then((result) => {
     if (result.isConfirmed) {
+      const elementoLista = botonElement.closest('li[data-categoria-art-id]');
+      
       fetch(`/api/categorias-articulos/${idCategoria}`,{ method: 'DELETE' })
-      .then(res => res.text())
-      .then(msg => {
-        mostrarAlertaExito('¡Borrada!');
-        cargarCategoriasArticulos();
-      });
+        .then(res => {
+          if (!res.ok) throw new Error('Error al eliminar la categoría');
+          return res.text();
+        })
+        .then(() => {
+          if (elementoLista) {
+            elementoLista.remove();
+          }
+          mostrarAlertaExito('¡Categoría eliminada!');
+        })
+        .catch(error => {
+          mostrarAlertaError('Error', error.message);
+          cargarCategoriasArticulos();
+        });
     }
   });
 }
@@ -998,14 +1104,15 @@ function cargarCategoriasGastos() {
       opcion.text = categoriaName;
       if(selectCategoria) selectCategoria.appendChild(opcion);
 
-      let li = document.createElement('li');
-      li.className = "list-group-item d-flex justify-content-between align-items-center";
-      li.innerHTML = `
-        <span>${categoriaName}</span>
-        <div>
-          <button class="btn btn-sm btn-outline-secondary me-1" onclick="cargarCategoriaGastoParaEditar(${categoriaId}, '${escapeQuotes(categoriaName)}')">Editar</button>
-          <button class="btn btn-sm btn-outline-danger" onclick="eliminarCategoriaGasto(${categoriaId})">Eliminar</button>
-        </div>`;
+    let li = document.createElement('li');
+        li.className = "list-group-item d-flex justify-content-between align-items-center";
+        li.setAttribute('data-categoria-gasto-id', categoriaId);
+        li.innerHTML = `
+          <span>${categoriaName}</span>
+          <div>
+            <button class="btn btn-sm btn-outline-secondary me-1" onclick="cargarCategoriaGastoParaEditar(${categoriaId}, '${escapeQuotes(categoriaName)}')">Editar</button>
+            <button class="btn btn-sm btn-outline-danger" onclick="eliminarCategoriaGasto(${categoriaId}, this)">Eliminar</button>
+          </div>`;
       fragment.appendChild(li);
     });
 
@@ -1017,7 +1124,7 @@ function cargarCategoriasGastos() {
   });
 }
 
-function eliminarCategoriaGasto(idCategoria) {
+function eliminarCategoriaGasto(idCategoria, botonElement) {
   Swal.fire({
     title: '¿Estás seguro?',
     showCancelButton: true,
@@ -1027,16 +1134,23 @@ function eliminarCategoriaGasto(idCategoria) {
     cancelButtonText: 'Cancelar'
   }).then((result) => {
     if (result.isConfirmed) {
+      const elementoLista = botonElement.closest('li[data-categoria-gasto-id]');
+      
       fetch(`/api/categorias/${idCategoria}`, { method: 'DELETE' })
-      .then(respuesta => {
-        if(!respuesta.ok) throw new Error("Error al borrar");
-        return respuesta.text();
-      })
-      .then(mensaje => {
-        mostrarAlertaExito('¡Borrada!');
-        cargarCategoriasGastos();
-      })
-      .catch(error => mostrarAlertaError('Error', 'No se pudo eliminar la categoría.'));
+        .then(respuesta => {
+          if(!respuesta.ok) throw new Error("Error al borrar");
+          return respuesta.text();
+        })
+        .then(() => {
+          if (elementoLista) {
+            elementoLista.remove();
+          }
+          mostrarAlertaExito('¡Categoría eliminada!');
+        })
+        .catch(error => {
+          mostrarAlertaError('Error', error.message);
+          cargarCategoriasGastos();
+        });
     }
   });
 }
@@ -1071,25 +1185,25 @@ function cargarUltimosGastos() {
             
             let filasHTML = '';
             
-            gastos.slice(0, 20).forEach(gasto => {
-                filasHTML += `<tr>
-                <td>${new Date(gasto.date).toLocaleDateString('es-AR')}</td>
-                <td><span class="badge bg-secondary">${gasto.category.name}</span></td>
-                <td>${gasto.description || '-'}</td>
-                <td class="text-danger fw-bold">$${gasto.amount}</td>
-                <td>
-                    <button class="btn btn-sm btn-outline-secondary me-1" onclick="cargarGastoParaEditar(${gasto.id},${gasto.category.id},${gasto.amount},'${gasto.description || ''}', '${gasto.date}')" data-bs-toggle="modal" data-bs-target="#modalGasto">Editar</button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="eliminarGasto(${gasto.id})">Eliminar</button>
-                </td>
-                </tr>`;
-            });
+  gastos.slice(0, 20).forEach(gasto => {
+      filasHTML += `<tr id="gasto-row-${gasto.id}">
+          <td>${new Date(gasto.date).toLocaleDateString('es-AR')}</td>
+          <td><span class="badge bg-secondary">${gasto.category.name}</span></td>
+          <td>${gasto.description || '-'}</td>
+          <td class="text-danger fw-bold">$${gasto.amount}</td>
+          <td>
+            <button class="btn btn-sm btn-outline-secondary me-1" onclick="cargarGastoParaEditar(${gasto.id},${gasto.category.id},${gasto.amount},'${gasto.description || ''}', '${gasto.date}')" data-bs-toggle="modal" data-bs-target="#modalGasto">Editar</button>
+            <button class="btn btn-sm btn-outline-danger" onclick="eliminarGasto(${gasto.id}, this)">Eliminar</button>
+          </td>
+        </tr>`;
+    });
             
             tbody.innerHTML = filasHTML;
         })
         .catch(error => console.error("Error al cargar gastos:", error));
 }
 
-function eliminarGasto(idGasto){
+function eliminarGasto(idGasto, botonElement){
   Swal.fire({
     title: '¿Borrar Gasto?',
     showCancelButton: true,
@@ -1098,16 +1212,23 @@ function eliminarGasto(idGasto){
     confirmButtonText: 'Sí, borrar'
   }).then((result) => {
     if (result.isConfirmed) {
+      const fila = botonElement.closest('tr[id^="gasto-row-"]');
+      
       fetch(`/api/expensas/${idGasto}`,{ method: 'DELETE' })
-      .then(respuesta => {
-        if(!respuesta.ok) throw new Error("Error al eliminar");
-        return respuesta.text();
-      })
-      .then(mensaje => {
-        mostrarAlertaExito('¡Borrada!');
-        cargarUltimosGastos();
-      })
-      .catch(error => mostrarAlertaError('Error', 'No se pudo eliminar el gasto.'));
+        .then(respuesta => {
+          if(!respuesta.ok) throw new Error("Error al eliminar");
+          return respuesta.text();
+        })
+        .then(() => {
+          if (fila) {
+            fila.remove();
+          }
+          mostrarAlertaExito('¡Gasto eliminado!');
+        })
+        .catch(error => {
+          mostrarAlertaError('Error', error.message);
+          cargarUltimosGastos();
+        });
     }
   });
 }
