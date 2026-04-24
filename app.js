@@ -745,18 +745,32 @@ function cancelarEdicionVariante() {
 }
 
 function eliminarVariante(idArticulo, idVariante){
-    Swal.fire({
-        title: '¿Borrar Variante?',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: 'Sí, borrar'
-    }).then((result) => {
-        if (result.isConfirmed) {
+  Swal.fire({
+    title: '¿Borrar Variante?',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    cancelButtonColor: '#6c757d',
+    confirmButtonText: 'Sí, borrar'
+  }).then((result) => {
+    if (result.isConfirmed) {
       fetch(`/api/articulos/${idArticulo}/variantes/${idVariante}`, { method: 'DELETE' })
-      .then(res => res.text())
+      .then(res => {
+        if (!res.ok) {
+          // Si el servidor devuelve 404, significa que la variante ya fue borrada
+          if (res.status === 404) {
+            throw new Error('La variante ya fue eliminada o no existe.');
+          }
+          throw new Error('Error al eliminar la variante.');
+        }
+        return res.text();
+      })
       .then(msg => {
         mostrarAlertaExito('¡Borrada!');
+        cargarArticulos();
+      })
+      .catch(error => {
+        mostrarAlertaError('Error', error.message);
+        // Recargar para reflejar el estado actual
         cargarArticulos();
       });
     }
