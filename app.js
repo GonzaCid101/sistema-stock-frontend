@@ -315,14 +315,14 @@ function cargarArticulos() {
         const varianteStock = parseInt(variante.stock);
         const varianteId = parseInt(variante.id);
 
-        htmlAdminItem += `<li class="list-group-item d-flex justify-content-between align-items-center bg-light">
-          <span>Talle: <strong>${varianteSize}</strong> | Color: <strong>${varianteColor}</strong> | Precio: ${variantePrice} | Stock: <span class="badge ${varianteStock > 0 ? 'bg-success' : 'bg-danger'}">${varianteStock}</span></span>
-          <div>
-            <button class="btn btn-sm btn-warning me-1" onclick="prepararStock(${varianteId},'${escapeQuotes(articuloName)}','${escapeQuotes(varianteSize)}')" data-bs-toggle="modal" data-bs-target="#modalStock">📦 Stock</button>
-            <button class="btn btn-sm btn-outline-secondary me-1" onclick="cargarVarianteParaEditar(${articuloId},${varianteId}, '${escapeQuotes(varianteSize)}', '${escapeQuotes(varianteColor)}', ${variantePrice}, '${escapeQuotes(variante.barCode)}')" data-bs-toggle="modal" data-bs-target="#modalVariante">✏️</button>
-            <button class="btn btn-sm btn-outline-danger" onclick="eliminarVariante(${articuloId}, ${varianteId})">🗑️</button>
-          </div>
-        </li>`;
+      htmlAdminItem += `<li class="list-group-item d-flex justify-content-between align-items-center bg-light" data-variante-id="${varianteId}">
+            <span>Talle: <strong>${varianteSize}</strong> | Color: <strong>${varianteColor}</strong> | Precio: ${variantePrice} | Stock: <span id="stock-badge-${varianteId}" class="badge ${varianteStock > 0 ? 'bg-success' : 'bg-danger'}">${varianteStock}</span></span>
+            <div>
+              <button class="btn btn-sm btn-warning me-1" onclick="prepararStock(${varianteId},'${escapeQuotes(articuloName)}','${escapeQuotes(varianteSize)}')" data-bs-toggle="modal" data-bs-target="#modalStock">📦 Stock</button>
+              <button class="btn btn-sm btn-outline-secondary me-1" onclick="cargarVarianteParaEditar(${articuloId},${varianteId}, '${escapeQuotes(varianteSize)}', '${escapeQuotes(varianteColor)}', ${variantePrice}, '${escapeQuotes(variante.barCode)}')" data-bs-toggle="modal" data-bs-target="#modalVariante">✏️</button>
+              <button class="btn btn-sm btn-outline-danger" onclick="eliminarVariante(${articuloId}, ${varianteId}, this)">🗑️</button>
+            </div>
+          </li>`;
       });
       htmlAdminItem += `</ul>`;
       liAdmin.innerHTML = htmlAdminItem;
@@ -744,7 +744,7 @@ function cancelarEdicionVariante() {
     idVarianteEnEdicion = null;
 }
 
-function eliminarVariante(idArticulo, idVariante){
+function eliminarVariante(idArticulo, idVariante, botonElement){
   Swal.fire({
     title: '¿Borrar Variante?',
     showCancelButton: true,
@@ -753,26 +753,30 @@ function eliminarVariante(idArticulo, idVariante){
     confirmButtonText: 'Sí, borrar'
   }).then((result) => {
     if (result.isConfirmed) {
+      const filaVariante = botonElement.closest('li[data-variante-id]');
+      
       fetch(`/api/articulos/${idArticulo}/variantes/${idVariante}`, { method: 'DELETE' })
-      .then(res => {
-        if (!res.ok) {
-          // Si el servidor devuelve 404, significa que la variante ya fue borrada
-          if (res.status === 404) {
-            throw new Error('La variante ya fue eliminada o no existe.');
+        .then(res => {
+          if (!res.ok) {
+            if (res.status === 404) {
+              throw new Error('La variante ya fue eliminada o no existe.');
+            }
+            throw new Error('Error al eliminar la variante.');
           }
-          throw new Error('Error al eliminar la variante.');
-        }
-        return res.text();
-      })
-      .then(msg => {
-        mostrarAlertaExito('¡Borrada!');
-        cargarArticulos();
-      })
-      .catch(error => {
-        mostrarAlertaError('Error', error.message);
-        // Recargar para reflejar el estado actual
-        cargarArticulos();
-      });
+          return res.text();
+        })
+        .then(() => {
+          // Optimistic UI: Eliminar del DOM inmediatamente sin recargar todo
+          if (filaVariante) {
+            filaVariante.remove();
+          }
+          mostrarAlertaExito('¡Variante eliminada!');
+        })
+        .catch(error => {
+          mostrarAlertaError('Error', error.message);
+          // Solo recargar en caso de error para sincronizar estado
+          cargarArticulos();
+        });
     }
   });
 }
@@ -1410,7 +1414,7 @@ function abrirModalPago(compraId, proveedor, numeroFactura, total, deuda) {
 
 // Función para confirmar el pago
 function confirmarPagoCompra() {
-  const compraId = document.getElementById('pago-compra-id').value;
+  const compraId = parseInt(document.getElementById('pago-compra-id').value);
   const monto = parseFloat(document.getElementById('monto-pago').value);
   const metodoPago = document.getElementById('metodo-pago-parcial').value;
 
@@ -1429,6 +1433,20 @@ function confirmarPagoCompra() {
     paymentMethod: metodoPago
   };
 
+  const celdaPagado = document.getElementById(`deuda-pagado-${compraId}`);
+  const celdaPendiente = document.getElementById(`deuda-pendiente-${compraId}`);
+  const celdaAccion = document.getElementById(`deuda-accion-${compraId}`);
+  
+  // Calcular valores optimistas
+  const pagadoActual = celdaPagado ? parseFloat(celdaPagado.innerText.replace('$', '')) : 0;
+  const deudaActual = celdaPendiente ? parseFloat(celdaPendiente.innerText.replace('$', '')) : 0;
+  const nuevoPagado = pagadoActual + monto;
+  const nuevaDeuda = deudaActual - monto;
+
+  // Cerrar modal inmediatamente para mejor UX
+  const modal = bootstrap.Modal.getInstance(document.getElementById('modalRegistrarPago'));
+  modal.hide();
+
   fetch(`/api/compras/${compraId}/pagos`, {
     method: 'POST',
     headers: {
@@ -1436,39 +1454,83 @@ function confirmarPagoCompra() {
     },
     body: JSON.stringify(pagoPayload)
   })
-  .then(respuesta => {
-    if (!respuesta.ok) {
-      return respuesta.text().then(text => {
-        throw new Error(text || 'Error al registrar el pago');
+    .then(respuesta => {
+      if (!respuesta.ok) {
+        return respuesta.text().then(text => {
+          throw new Error(text || 'Error al registrar el pago');
+        });
+      }
+      return respuesta.json();
+    })
+    .then(compraActualizada => {
+      if (celdaPagado) {
+        celdaPagado.innerText = `$${nuevoPagado.toFixed(2)}`;
+      }
+      if (celdaPendiente) {
+        celdaPendiente.innerText = `$${compraActualizada.pendingAmount.toFixed(2)}`;
+      }
+      
+      // Si la deuda llegó a 0, actualizar UI para mostrar como pagada
+      if (compraActualizada.pendingAmount <= 0 && celdaAccion) {
+        celdaAccion.innerHTML = '<span class="badge bg-success">PAGADA</span>';
+        
+        const fila = document.getElementById(`deuda-row-${compraId}`);
+        if (fila) {
+          fila.style.transition = 'opacity 0.5s ease';
+          fila.style.opacity = '0.5';
+        }
+      }
+
+      // Mostrar éxito
+      Swal.fire({
+        title: '¡Pago registrado!',
+        text: `Se registró un pago de $${monto.toFixed(2)}. Deuda restante: $${compraActualizada.pendingAmount.toFixed(2)}`,
+        icon: 'success',
+        timer: 2000,
+        showConfirmButton: false
       });
+
+      // Solo recargar el resumen de deudas, no la tabla completa
+      actualizarResumenDeudas();
+    })
+    .catch(error => {
+      Swal.fire({
+        title: 'Error',
+        text: error.message,
+        icon: 'error'
+      });
+      // En caso de error, recargar para sincronizar estado
+      cargarDeudas();
+    });
+}
+
+// Función auxiliar para actualizar solo el resumen de deudas sin recargar toda la tabla
+function actualizarResumenDeudas() {
+  const filasDeuda = document.querySelectorAll('#tbody-deudas tr');
+  let totalDeuda = 0;
+  let cantidadDeudas = filasDeuda.length;
+
+  filasDeuda.forEach(fila => {
+    const celdaPendiente = fila.querySelector('td:nth-child(7)');
+    if (celdaPendiente) {
+      const deuda = parseFloat(celdaPendiente.innerText.replace('$', '')) || 0;
+      if (deuda > 0) {
+        totalDeuda += deuda;
+      } else {
+        cantidadDeudas--; // No contar deudas ya pagadas
+      }
     }
-    return respuesta.json();
-  })
-  .then(compraActualizada => {
-    // Cerrar modal
-    var modal = bootstrap.Modal.getInstance(document.getElementById('modalRegistrarPago'));
-    modal.hide();
-
-    // Mostrar éxito
-    Swal.fire({
-      title: '¡Pago registrado!',
-      text: `Se registró un pago de $${monto.toFixed(2)}. Deuda restante: $${compraActualizada.pendingAmount.toFixed(2)}`,
-      icon: 'success',
-      timer: 2000,
-      showConfirmButton: false
-    });
-
-    // Recargar tabla
-    const mesActual = document.getElementById('mesAnio-compras').value;
-    cargarHistorialCompras(mesActual);
-  })
-  .catch(error => {
-    Swal.fire({
-      title: 'Error',
-      text: error.message,
-      icon: 'error'
-    });
   });
+
+  const resumenTotal = document.getElementById('resumen-total-deudas');
+  const resumenCantidad = document.getElementById('resumen-cantidad-deudas');
+  
+  if (resumenTotal) {
+    resumenTotal.innerText = totalDeuda.toFixed(2);
+  }
+  if (resumenCantidad) {
+    resumenCantidad.innerText = cantidadDeudas;
+  }
 }
 
 // Función para cargar deudas pendientes con proveedores
@@ -1514,16 +1576,16 @@ function cargarDeudas() {
       // Botón de pagar siempre visible en la pantalla de deudas
       let botonPago = `<button class="btn btn-sm btn-success" onclick="abrirModalPago(${compra.id}, '${escapeQuotes(compra.supplier)}', '${escapeQuotes(compra.invoiceNumber || '-')}', ${compra.totalAmount}, ${deuda})">💰 Pagar</button>`;
 
-      filasHTML += `<tr>
-        <td>${compra.id}</td>
-        <td>${new Date(compra.date).toLocaleString('es-AR')}</td>
-        <td>${sanitizeText(compra.supplier)}</td>
-        <td>${sanitizeText(compra.invoiceNumber || '-')}</td>
-        <td class="fw-bold">$${compra.totalAmount}</td>
-        <td class="text-success">$${pagado.toFixed(2)}</td>
-        <td class="text-danger fw-bold">$${deuda.toFixed(2)}</td>
-        <td>${botonPago}</td>
-      </tr>`;
+    filasHTML += `<tr id="deuda-row-${compra.id}">
+          <td>${compra.id}</td>
+          <td>${new Date(compra.date).toLocaleString('es-AR')}</td>
+          <td>${sanitizeText(compra.supplier)}</td>
+          <td>${sanitizeText(compra.invoiceNumber || '-')}</td>
+          <td class="fw-bold">$${compra.totalAmount}</td>
+          <td id="deuda-pagado-${compra.id}" class="text-success">$${pagado.toFixed(2)}</td>
+          <td id="deuda-pendiente-${compra.id}" class="text-danger fw-bold">$${deuda.toFixed(2)}</td>
+          <td id="deuda-accion-${compra.id}">${botonPago}</td>
+        </tr>`;
     });
     tbody.innerHTML = filasHTML;
   })
