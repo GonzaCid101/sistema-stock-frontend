@@ -842,18 +842,19 @@ function cargarMarcas() {
       if(selectMarca) selectMarca.appendChild(opcion);
       if(filtroMarca) filtroMarca.appendChild(opcion.cloneNode(true));
 
-      let li = document.createElement('li');
-      li.className = "list-group-item d-flex justify-content-between align-items-center";
-      li.innerHTML = `
-        <div>
-          <strong>${marcaName}</strong> <br>
-          <small class="text-muted">${marcaDesc || ''}</small>
-        </div>
-        <div>
-          <button class="btn btn-sm btn-outline-secondary me-2" data-bs-toggle="modal" data-bs-target="#modalMarca" onclick="cargarMarcaParaEditar(${marcaId}, '${escapeQuotes(marcaName)}', '${escapeQuotes(marcaDesc)}')">✏️ Editar</button>
-          <button class="btn btn-sm btn-outline-danger" onclick="eliminarMarca(${marcaId})">🗑️ Borrar</button>
-        </div>
-      `;
+    let li = document.createElement('li');
+        li.className = "list-group-item d-flex justify-content-between align-items-center";
+        li.setAttribute('data-marca-id', marcaId);
+        li.innerHTML = `
+          <div>
+            <strong>${marcaName}</strong> <br>
+            <small class="text-muted">${marcaDesc || ''}</small>
+          </div>
+          <div>
+            <button class="btn btn-sm btn-outline-secondary me-2" data-bs-toggle="modal" data-bs-target="#modalMarca" onclick="cargarMarcaParaEditar(${marcaId}, '${escapeQuotes(marcaName)}', '${escapeQuotes(marcaDesc)}')">✏️ Editar</button>
+            <button class="btn btn-sm btn-outline-danger" onclick="eliminarMarca(${marcaId}, this)">🗑️ Borrar</button>
+          </div>
+        `;
       fragment.appendChild(li);
     });
 
@@ -865,7 +866,7 @@ function cargarMarcas() {
 });
 }
 
-function eliminarMarca(idMarca){
+function eliminarMarca(idMarca, botonElement){
   Swal.fire({
     title: '¿Borrar Marca?',
     text: "Verificá que no tenga artículos asociados",
@@ -875,12 +876,24 @@ function eliminarMarca(idMarca){
     confirmButtonText: 'Sí, borrar'
   }).then((result) => {
     if (result.isConfirmed) {
+      const elementoLista = botonElement.closest('li[data-marca-id]');
+      
       fetch(`/api/marcas/${idMarca}`,{ method: 'DELETE' })
-      .then(res => res.text())
-      .then(msg => {
-        mostrarAlertaExito('¡Borrada!');
-        cargarMarcas();
-      });
+        .then(res => {
+          if (!res.ok) throw new Error('Error al eliminar la marca');
+          return res.text();
+        })
+        .then(() => {
+          // Optimistic UI: Eliminar del DOM inmediatamente
+          if (elementoLista) {
+            elementoLista.remove();
+          }
+          mostrarAlertaExito('¡Marca eliminada!');
+        })
+        .catch(error => {
+          mostrarAlertaError('Error', error.message);
+          cargarMarcas();
+        });
     }
   });
 }
@@ -931,18 +944,19 @@ function cargarCategoriasArticulos() {
       selectCategoria.appendChild(opcion);
       filtroCategoria.appendChild(opcion.cloneNode(true));
 
-      let li = document.createElement('li');
-      li.className = "list-group-item d-flex justify-content-between align-items-center";
-      li.innerHTML = `
-        <div>
-          <strong>${categoriaName}</strong> <br>
-          <small class="text-muted">${categoriaDesc || ''}</small>
-        </div>
-        <div>
-          <button class="btn btn-sm btn-outline-secondary me-2" data-bs-toggle="modal" data-bs-target="#modalCategoriaArticulo" onclick="cargarCategoriaArticuloParaEditar(${categoriaId}, '${escapeQuotes(categoriaName)}', '${escapeQuotes(categoriaDesc)}')">✏️ Editar</button>
-          <button class="btn btn-sm btn-outline-danger" onclick="eliminarCategoriaArticulo(${categoriaId})">🗑️ Borrar</button>
-        </div>
-      `;
+    let li = document.createElement('li');
+        li.className = "list-group-item d-flex justify-content-between align-items-center";
+        li.setAttribute('data-categoria-art-id', categoriaId);
+        li.innerHTML = `
+          <div>
+            <strong>${categoriaName}</strong> <br>
+            <small class="text-muted">${categoriaDesc || ''}</small>
+          </div>
+          <div>
+            <button class="btn btn-sm btn-outline-secondary me-2" data-bs-toggle="modal" data-bs-target="#modalCategoriaArticulo" onclick="cargarCategoriaArticuloParaEditar(${categoriaId}, '${escapeQuotes(categoriaName)}', '${escapeQuotes(categoriaDesc)}')">✏️ Editar</button>
+            <button class="btn btn-sm btn-outline-danger" onclick="eliminarCategoriaArticulo(${categoriaId}, this)">🗑️ Borrar</button>
+          </div>
+        `;
       fragment.appendChild(li);
     });
 
@@ -955,7 +969,7 @@ function cargarCategoriasArticulos() {
 }
 
 
-function eliminarCategoriaArticulo(idCategoria){
+function eliminarCategoriaArticulo(idCategoria, botonElement){
   Swal.fire({
     title: '¿Borrar Categoría?',
     text: "Verificá que no tenga artículos asociados",
@@ -965,12 +979,24 @@ function eliminarCategoriaArticulo(idCategoria){
     confirmButtonText: 'Sí, borrar'
   }).then((result) => {
     if (result.isConfirmed) {
+      const elementoLista = botonElement.closest('li[data-categoria-art-id]');
+      
       fetch(`/api/categorias-articulos/${idCategoria}`,{ method: 'DELETE' })
-      .then(res => res.text())
-      .then(msg => {
-        mostrarAlertaExito('¡Borrada!');
-        cargarCategoriasArticulos();
-      });
+        .then(res => {
+          if (!res.ok) throw new Error('Error al eliminar la categoría');
+          return res.text();
+        })
+        .then(() => {
+          // Optimistic UI: Eliminar del DOM inmediatamente
+          if (elementoLista) {
+            elementoLista.remove();
+          }
+          mostrarAlertaExito('¡Categoría eliminada!');
+        })
+        .catch(error => {
+          mostrarAlertaError('Error', error.message);
+          cargarCategoriasArticulos();
+        });
     }
   });
 }
@@ -998,14 +1024,15 @@ function cargarCategoriasGastos() {
       opcion.text = categoriaName;
       if(selectCategoria) selectCategoria.appendChild(opcion);
 
-      let li = document.createElement('li');
-      li.className = "list-group-item d-flex justify-content-between align-items-center";
-      li.innerHTML = `
-        <span>${categoriaName}</span>
-        <div>
-          <button class="btn btn-sm btn-outline-secondary me-1" onclick="cargarCategoriaGastoParaEditar(${categoriaId}, '${escapeQuotes(categoriaName)}')">Editar</button>
-          <button class="btn btn-sm btn-outline-danger" onclick="eliminarCategoriaGasto(${categoriaId})">Eliminar</button>
-        </div>`;
+    let li = document.createElement('li');
+        li.className = "list-group-item d-flex justify-content-between align-items-center";
+        li.setAttribute('data-categoria-gasto-id', categoriaId);
+        li.innerHTML = `
+          <span>${categoriaName}</span>
+          <div>
+            <button class="btn btn-sm btn-outline-secondary me-1" onclick="cargarCategoriaGastoParaEditar(${categoriaId}, '${escapeQuotes(categoriaName)}')">Editar</button>
+            <button class="btn btn-sm btn-outline-danger" onclick="eliminarCategoriaGasto(${categoriaId}, this)">Eliminar</button>
+          </div>`;
       fragment.appendChild(li);
     });
 
@@ -1017,7 +1044,7 @@ function cargarCategoriasGastos() {
   });
 }
 
-function eliminarCategoriaGasto(idCategoria) {
+function eliminarCategoriaGasto(idCategoria, botonElement) {
   Swal.fire({
     title: '¿Estás seguro?',
     showCancelButton: true,
@@ -1027,16 +1054,24 @@ function eliminarCategoriaGasto(idCategoria) {
     cancelButtonText: 'Cancelar'
   }).then((result) => {
     if (result.isConfirmed) {
+      const elementoLista = botonElement.closest('li[data-categoria-gasto-id]');
+      
       fetch(`/api/categorias/${idCategoria}`, { method: 'DELETE' })
-      .then(respuesta => {
-        if(!respuesta.ok) throw new Error("Error al borrar");
-        return respuesta.text();
-      })
-      .then(mensaje => {
-        mostrarAlertaExito('¡Borrada!');
-        cargarCategoriasGastos();
-      })
-      .catch(error => mostrarAlertaError('Error', 'No se pudo eliminar la categoría.'));
+        .then(respuesta => {
+          if(!respuesta.ok) throw new Error("Error al borrar");
+          return respuesta.text();
+        })
+        .then(() => {
+          // Optimistic UI: Eliminar del DOM inmediatamente
+          if (elementoLista) {
+            elementoLista.remove();
+          }
+          mostrarAlertaExito('¡Categoría eliminada!');
+        })
+        .catch(error => {
+          mostrarAlertaError('Error', error.message);
+          cargarCategoriasGastos();
+        });
     }
   });
 }
@@ -1071,25 +1106,25 @@ function cargarUltimosGastos() {
             
             let filasHTML = '';
             
-            gastos.slice(0, 20).forEach(gasto => {
-                filasHTML += `<tr>
-                <td>${new Date(gasto.date).toLocaleDateString('es-AR')}</td>
-                <td><span class="badge bg-secondary">${gasto.category.name}</span></td>
-                <td>${gasto.description || '-'}</td>
-                <td class="text-danger fw-bold">$${gasto.amount}</td>
-                <td>
-                    <button class="btn btn-sm btn-outline-secondary me-1" onclick="cargarGastoParaEditar(${gasto.id},${gasto.category.id},${gasto.amount},'${gasto.description || ''}', '${gasto.date}')" data-bs-toggle="modal" data-bs-target="#modalGasto">Editar</button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="eliminarGasto(${gasto.id})">Eliminar</button>
-                </td>
-                </tr>`;
-            });
+    gastos.slice(0, 20).forEach(gasto => {
+      filasHTML += `<tr id="gasto-row-${gasto.id}">
+          <td>${new Date(gasto.date).toLocaleDateString('es-AR')}</td>
+          <td><span class="badge bg-secondary">${gasto.category.name}</span></td>
+          <td>${gasto.description || '-'}</td>
+          <td class="text-danger fw-bold">$${gasto.amount}</td>
+          <td>
+            <button class="btn btn-sm btn-outline-secondary me-1" onclick="cargarGastoParaEditar(${gasto.id},${gasto.category.id},${gasto.amount},'${gasto.description || ''}', '${gasto.date}')" data-bs-toggle="modal" data-bs-target="#modalGasto">Editar</button>
+            <button class="btn btn-sm btn-outline-danger" onclick="eliminarGasto(${gasto.id}, this)">Eliminar</button>
+          </td>
+        </tr>`;
+    });
             
             tbody.innerHTML = filasHTML;
         })
         .catch(error => console.error("Error al cargar gastos:", error));
 }
 
-function eliminarGasto(idGasto){
+function eliminarGasto(idGasto, botonElement){
   Swal.fire({
     title: '¿Borrar Gasto?',
     showCancelButton: true,
@@ -1098,16 +1133,24 @@ function eliminarGasto(idGasto){
     confirmButtonText: 'Sí, borrar'
   }).then((result) => {
     if (result.isConfirmed) {
+      const fila = botonElement.closest('tr[id^="gasto-row-"]');
+      
       fetch(`/api/expensas/${idGasto}`,{ method: 'DELETE' })
-      .then(respuesta => {
-        if(!respuesta.ok) throw new Error("Error al eliminar");
-        return respuesta.text();
-      })
-      .then(mensaje => {
-        mostrarAlertaExito('¡Borrada!');
-        cargarUltimosGastos();
-      })
-      .catch(error => mostrarAlertaError('Error', 'No se pudo eliminar el gasto.'));
+        .then(respuesta => {
+          if(!respuesta.ok) throw new Error("Error al eliminar");
+          return respuesta.text();
+        })
+        .then(() => {
+          // Optimistic UI: Eliminar del DOM inmediatamente
+          if (fila) {
+            fila.remove();
+          }
+          mostrarAlertaExito('¡Gasto eliminado!');
+        })
+        .catch(error => {
+          mostrarAlertaError('Error', error.message);
+          cargarUltimosGastos();
+        });
     }
   });
 }
