@@ -515,8 +515,8 @@ document.getElementById('formulario-stock').addEventListener('submit',function(e
     // Optimistic UI: Actualizar badge de stock en el DOM sin recargar
     if (idVarianteEnMemoria) {
       const stockBadge = document.getElementById(`stock-badge-${idVarianteEnMemoria}`);
-      if (stockBadge && movimientoGuardado && movimientoGuardado.newStock !== undefined) {
-        const nuevoStock = parseInt(movimientoGuardado.newStock);
+      if (stockBadge && movimientoGuardado && movimientoGuardado.variant) {
+        const nuevoStock = parseInt(movimientoGuardado.variant.stock);
         stockBadge.innerText = nuevoStock;
         stockBadge.className = `badge ${nuevoStock > 0 ? 'bg-success' : 'bg-danger'}`;
         
