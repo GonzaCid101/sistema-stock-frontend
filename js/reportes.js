@@ -403,6 +403,10 @@ function confirmarPagoCompra() {
             return respuesta.json();
         })
         .then(compraActualizada => {
+
+            const index = cacheDeudas.findIndex(c => c.id === compraId);
+            if (index !== -1) cacheDeudas[index] = compraActualizada;
+            
             if (celdaPagado) {
                 celdaPagado.innerText = `$${nuevoPagado.toFixed(2)}`;
             }
