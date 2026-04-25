@@ -344,9 +344,6 @@ function cargarHistorialGastos(mesFiltro) {
 // GESTIÓN DE DEUDAS Y PAGOS
 // =========================================================
 
-// Cache local para historial de pagos
-let cacheDeudas = [];
-
 function abrirModalPago(compraId, proveedor, numeroFactura, total, deuda) {
     document.getElementById('pago-compra-id').value = compraId;
     document.getElementById('pago-proveedor-nombre').innerText = proveedor;
