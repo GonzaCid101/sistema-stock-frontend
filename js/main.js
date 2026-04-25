@@ -725,7 +725,7 @@ document.getElementById('btn-cobrar').addEventListener('click',function() {
             return respuesta.text();
         })
         .then(mensajeDelServidor => {
-            alert(mensajeDelServidor);
+            alert("Operación registrada");
 
             carrito = [];
 
@@ -791,7 +791,7 @@ document.getElementById('btn-pagar').addEventListener('click',function() {
             return respuesta.text();
         })
   .then(mensajeDelServidor => {
-      alert(mensajeDelServidor);
+      alert("Operación registrada");
 
       ingreso = [];
 
