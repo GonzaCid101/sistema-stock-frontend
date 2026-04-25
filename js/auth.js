@@ -23,3 +23,8 @@ function verificarSesion() {
     }
     return true;
 }
+
+function cerrarSesion() {
+    localStorage.removeItem('tokenJWT');
+    window.location.reload();
+}
