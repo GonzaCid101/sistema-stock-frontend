@@ -190,11 +190,13 @@ document.getElementById('formulario-variante').addEventListener('submit', functi
   //Modo creacion
   let urlFetch = `/api/articulos/${idArticuloEnMemoria}/variantes`;
   let metodoHTTP = 'POST';
+  let esModoEdicion = false;
 
   //Modo edicion
   if(idVarianteEnEdicion !== null){
     urlFetch = `/api/articulos/${idArticuloEnMemoria}/variantes/${idVarianteEnEdicion}`;
     metodoHTTP = 'PUT';
+    esModoEdicion = true;
   }
     
 
@@ -240,8 +242,15 @@ document.getElementById('formulario-variante').addEventListener('submit', functi
                 <button class="btn btn-sm btn-outline-danger" onclick="eliminarVariante(${idArticuloEnMemoria}, ${vId}, this)">🗑️</button>
               </div>
             </li>`;
-            
-            ulVariantes.insertAdjacentHTML('beforeend', nuevaFilaHTML);
+
+            if (esModoEdicion){
+              const filaVieja = ulVariantes.querySelector(`li[data-variante-id="${vId}"]`);
+              if (filaVieja) {
+                filaVieja.outerHTML = nuevaFilaHTML;
+              }
+            } else {
+              ulVariantes.insertAdjacentHTML('beforeend', nuevaFilaHTML);
+            }
           }
         }
       }
@@ -725,7 +734,7 @@ document.getElementById('btn-cobrar').addEventListener('click',function() {
             return respuesta.text();
         })
         .then(mensajeDelServidor => {
-            alert("Operación registrada");
+            mostrarAlertaExito('Operación Exitosa', 'El registro se guardó correctamente.');
 
             carrito = [];
 
@@ -791,7 +800,7 @@ document.getElementById('btn-pagar').addEventListener('click',function() {
             return respuesta.text();
         })
   .then(mensajeDelServidor => {
-      alert("Operación registrada");
+      mostrarAlertaExito('Operación Exitosa', 'El registro se guardó correctamente.');
 
       ingreso = [];
 
